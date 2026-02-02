@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import AlbumCard from "@/components/AlbumCard";
-import { mockAlbums } from "@/data/mockAlbums";
-import { Disc3, Filter } from "lucide-react";
+import { useAlbums } from "@/hooks/useAlbums";
+import { Disc3, Filter, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -9,10 +9,11 @@ type EditionFilter = "all" | "Japanese" | "International" | "Deluxe";
 
 const Albums = () => {
   const [filter, setFilter] = useState<EditionFilter>("all");
+  const { data: albums, isLoading } = useAlbums();
 
   const filteredAlbums = filter === "all" 
-    ? mockAlbums 
-    : mockAlbums.filter((album) => album.editionType === filter);
+    ? albums 
+    : albums?.filter((album) => album.edition_type === filter);
 
   const filters: { value: EditionFilter; label: string }[] = [
     { value: "all", label: "All" },
@@ -67,31 +68,43 @@ const Albums = () => {
           ))}
         </motion.div>
 
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        )}
+
         {/* Albums Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredAlbums.map((album, index) => (
-            <AlbumCard
-              key={album.id}
-              id={album.id}
-              title={album.title}
-              coverUrl={album.coverUrl}
-              releaseDate={album.releaseDate}
-              editionType={album.editionType}
-              trackCount={album.tracks.length}
-              index={index}
-            />
-          ))}
-        </div>
+        {!isLoading && filteredAlbums && filteredAlbums.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredAlbums.map((album, index) => (
+              <AlbumCard
+                key={album.id}
+                id={album.id}
+                title={album.title}
+                coverUrl={album.cover_url || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
+                releaseDate={album.release_date || new Date().toISOString()}
+                editionType={album.edition_type}
+                trackCount={album.tracks?.length || 0}
+                index={index}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Empty State */}
-        {filteredAlbums.length === 0 && (
+        {!isLoading && (!filteredAlbums || filteredAlbums.length === 0) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="text-center py-20"
           >
+            <Disc3 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">
-              No albums found with the selected filter.
+              {filter === "all" 
+                ? "No albums in the archive yet." 
+                : `No ${filter} albums found.`}
             </p>
           </motion.div>
         )}

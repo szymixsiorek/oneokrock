@@ -14,7 +14,95 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      albums: {
+        Row: {
+          accent_color: string | null
+          cover_url: string | null
+          created_at: string
+          description: string | null
+          edition_type: Database["public"]["Enums"]["edition_type"]
+          id: string
+          release_date: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          accent_color?: string | null
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          edition_type?: Database["public"]["Enums"]["edition_type"]
+          id?: string
+          release_date?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          accent_color?: string | null
+          cover_url?: string | null
+          created_at?: string
+          description?: string | null
+          edition_type?: Database["public"]["Enums"]["edition_type"]
+          id?: string
+          release_date?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tracks: {
+        Row: {
+          album_id: string
+          artist: string
+          created_at: string
+          duration: string | null
+          featured_artist: string | null
+          id: string
+          is_hidden_track: boolean
+          lyrics_language: Database["public"]["Enums"]["lyrics_language"]
+          mp3_url: string | null
+          title: string
+          track_number: number
+          updated_at: string
+        }
+        Insert: {
+          album_id: string
+          artist?: string
+          created_at?: string
+          duration?: string | null
+          featured_artist?: string | null
+          id?: string
+          is_hidden_track?: boolean
+          lyrics_language?: Database["public"]["Enums"]["lyrics_language"]
+          mp3_url?: string | null
+          title: string
+          track_number?: number
+          updated_at?: string
+        }
+        Update: {
+          album_id?: string
+          artist?: string
+          created_at?: string
+          duration?: string | null
+          featured_artist?: string | null
+          id?: string
+          is_hidden_track?: boolean
+          lyrics_language?: Database["public"]["Enums"]["lyrics_language"]
+          mp3_url?: string | null
+          title?: string
+          track_number?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracks_album_id_fkey"
+            columns: ["album_id"]
+            isOneToOne: false
+            referencedRelation: "albums"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +111,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      edition_type: "Japanese" | "International" | "Deluxe"
+      lyrics_language: "JA" | "EN" | "Mixed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +239,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      edition_type: ["Japanese", "International", "Deluxe"],
+      lyrics_language: ["JA", "EN", "Mixed"],
+    },
   },
 } as const
