@@ -1,0 +1,243 @@
+import { useParams, Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { getAlbumById } from "@/data/mockAlbums";
+import { 
+  ArrowLeft, 
+  Play, 
+  Clock, 
+  Disc3, 
+  Shuffle, 
+  Heart,
+  MoreHorizontal,
+  Mic2
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+const AlbumDetail = () => {
+  const { id } = useParams<{ id: string }>();
+  const album = getAlbumById(id || "");
+
+  if (!album) {
+    return (
+      <div className="min-h-screen pt-28 pb-32 px-4 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-4">
+            Album not found
+          </h1>
+          <Link to="/albums">
+            <Button variant="outline" className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Albums
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const totalDuration = album.tracks.reduce((acc, track) => {
+    const [mins, secs] = track.duration.split(":").map(Number);
+    return acc + mins * 60 + secs;
+  }, 0);
+
+  const formatTotalDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    return `${mins} min`;
+  };
+
+  const languageColors = {
+    JA: "bg-primary/20 text-primary",
+    EN: "bg-accent/20 text-accent",
+    Mixed: "bg-muted text-muted-foreground",
+  };
+
+  return (
+    <div className="min-h-screen pt-24 pb-32">
+      {/* Hero Section */}
+      <div className="relative">
+        {/* Background Blur */}
+        <div 
+          className="absolute inset-0 h-[500px] opacity-30 blur-3xl"
+          style={{
+            background: `linear-gradient(180deg, ${album.accentColor}40 0%, transparent 100%)`,
+          }}
+        />
+
+        <div className="container mx-auto max-w-6xl px-4 relative z-10">
+          {/* Back Button */}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4 }}
+            className="mb-8"
+          >
+            <Link to="/albums">
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="w-4 h-4" />
+                Back
+              </Button>
+            </Link>
+          </motion.div>
+
+          {/* Album Header */}
+          <div className="flex flex-col md:flex-row gap-8 items-start">
+            {/* Cover Art */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              className="w-full md:w-72 flex-shrink-0"
+            >
+              <div className="aspect-square rounded-2xl overflow-hidden glass-panel p-2">
+                <img
+                  src={album.coverUrl}
+                  alt={album.title}
+                  className="w-full h-full object-cover rounded-xl"
+                />
+              </div>
+            </motion.div>
+
+            {/* Album Info */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="flex-1 space-y-6"
+            >
+              {/* Edition Badge */}
+              <div className="flex items-center gap-3">
+                <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
+                  album.editionType === "Japanese" 
+                    ? "bg-primary/20 text-primary" 
+                    : album.editionType === "International"
+                    ? "bg-accent/20 text-accent"
+                    : "bg-cyan-400/20 text-cyan-400"
+                }`}>
+                  {album.editionType} Edition
+                </span>
+              </div>
+
+              {/* Title */}
+              <div>
+                <h1 className="text-4xl md:text-5xl font-black text-foreground mb-2">
+                  {album.title}
+                </h1>
+                <p className="text-xl text-muted-foreground">ONE OK ROCK</p>
+              </div>
+
+              {/* Meta */}
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span>{new Date(album.releaseDate).getFullYear()}</span>
+                <span>•</span>
+                <span>{album.tracks.length} tracks</span>
+                <span>•</span>
+                <span>{formatTotalDuration(totalDuration)}</span>
+              </div>
+
+              {/* Description */}
+              <p className="text-muted-foreground leading-relaxed max-w-xl">
+                {album.description}
+              </p>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-2">
+                <Button size="lg" className="gap-2 neon-glow-red">
+                  <Play className="w-5 h-5" fill="currentColor" />
+                  Play
+                </Button>
+                <Button size="lg" variant="outline" className="gap-2 glass-panel border-border/50">
+                  <Shuffle className="w-5 h-5" />
+                  Shuffle
+                </Button>
+                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary">
+                  <Heart className="w-5 h-5" />
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tracklist */}
+      <div className="container mx-auto max-w-6xl px-4 mt-12">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="glass-panel rounded-2xl p-6"
+        >
+          {/* Tracklist Header */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground px-4 pb-4 border-b border-border/50">
+            <span className="w-10 text-center">#</span>
+            <span className="flex-1">Title</span>
+            <span className="w-20 hidden sm:block">Language</span>
+            <Clock className="w-4 h-4" />
+          </div>
+
+          {/* Tracks */}
+          <div className="divide-y divide-border/30">
+            {album.tracks.map((track, index) => (
+              <motion.div
+                key={track.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: 0.3 + index * 0.03 }}
+                className="track-row flex items-center gap-2 group cursor-pointer"
+              >
+                {/* Track Number / Play */}
+                <div className="w-10 text-center">
+                  <span className="text-muted-foreground group-hover:hidden">
+                    {track.trackNumber}
+                  </span>
+                  <Play className="w-4 h-4 text-primary hidden group-hover:block mx-auto" />
+                </div>
+
+                {/* Title & Artist */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                      {track.title}
+                    </p>
+                    {track.isHiddenTrack && (
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent">
+                        Hidden
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>{track.artist}</span>
+                    {track.featuredArtist && (
+                      <>
+                        <Mic2 className="w-3 h-3" />
+                        <span className="text-primary/80">{track.featuredArtist}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Language */}
+                <div className="w-20 hidden sm:block">
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${languageColors[track.lyricsLanguage]}`}>
+                    {track.lyricsLanguage}
+                  </span>
+                </div>
+
+                {/* Duration */}
+                <span className="text-sm text-muted-foreground w-12 text-right">
+                  {track.duration}
+                </span>
+
+                {/* More Options */}
+                <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+export default AlbumDetail;
