@@ -312,7 +312,7 @@ const AlbumDetail = () => {
 
                     {/* Duration */}
                     <span className="text-sm text-muted-foreground w-12 text-right">
-                      {track.duration || "-"}
+                      {track.duration && track.duration !== "0:00" ? track.duration : "-"}
                     </span>
 
                     {/* More Options */}
