@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { useState } from "react";
 import { 
   Play, 
   Pause, 
@@ -7,10 +8,12 @@ import {
   Volume2, 
   Repeat, 
   Shuffle,
-  VolumeX
+  VolumeX,
+  Maximize2
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
+import FullscreenPlayer from "./FullscreenPlayer";
 
 const formatTime = (seconds: number): string => {
   if (!seconds || isNaN(seconds)) return "0:00";
@@ -20,6 +23,8 @@ const formatTime = (seconds: number): string => {
 };
 
 const PlayerBar = () => {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
   const {
     currentTrack,
     isPlaying,
@@ -72,9 +77,12 @@ const PlayerBar = () => {
     >
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center gap-4">
-          {/* Track Info */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
+          {/* Track Info - clickable to expand */}
+          <div 
+            className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer group"
+            onClick={() => setIsFullscreen(true)}
+          >
+            <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 group-hover:ring-2 ring-primary/50 transition-all">
               <img
                 src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop"}
                 alt={currentTrack.title}
@@ -82,7 +90,7 @@ const PlayerBar = () => {
               />
             </div>
             <div className="min-w-0">
-              <p className="font-medium text-foreground text-sm truncate">
+              <p className="font-medium text-foreground text-sm truncate group-hover:text-primary transition-colors">
                 {currentTrack.title}
               </p>
               <p className="text-xs text-muted-foreground truncate">
@@ -150,7 +158,7 @@ const PlayerBar = () => {
             </div>
           </div>
 
-          {/* Volume */}
+          {/* Volume & Expand */}
           <div className="flex items-center gap-3 flex-1 justify-end">
             <div className="flex items-center gap-2 w-28 hidden sm:flex">
               {volume === 0 ? (
@@ -166,9 +174,22 @@ const PlayerBar = () => {
                 className="flex-1"
               />
             </div>
+            <button
+              onClick={() => setIsFullscreen(true)}
+              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+              title="Expand player"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
+      
+      {/* Fullscreen Player */}
+      <FullscreenPlayer 
+        isOpen={isFullscreen} 
+        onClose={() => setIsFullscreen(false)} 
+      />
     </motion.div>
   );
 };
