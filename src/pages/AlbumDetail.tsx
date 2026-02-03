@@ -1,9 +1,11 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAlbum } from "@/hooks/useAlbums";
+import { useAudioPlayer, Track } from "@/contexts/AudioPlayerContext";
 import { 
   ArrowLeft, 
   Play, 
+  Pause,
   Clock, 
   Shuffle, 
   Heart,
@@ -16,6 +18,7 @@ import { Button } from "@/components/ui/button";
 const AlbumDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { data: album, isLoading, error } = useAlbum(id || "");
+  const { play, currentTrack, isPlaying, togglePlayPause, toggleShuffle } = useAudioPlayer();
 
   if (isLoading) {
     return (
@@ -61,6 +64,52 @@ const AlbumDetail = () => {
   };
 
   const accentColor = album.accent_color || "#ff0033";
+
+  // Build queue from album tracks
+  const buildQueue = (): Track[] => {
+    if (!album.tracks) return [];
+    return album.tracks
+      .filter(t => t.mp3_url)
+      .map(t => ({
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        duration: t.duration,
+        mp3_url: t.mp3_url,
+        albumCover: album.cover_url,
+        albumId: album.id,
+        albumTitle: album.title,
+      }));
+  };
+
+  const handlePlayTrack = (trackId: string) => {
+    const queue = buildQueue();
+    const track = queue.find(t => t.id === trackId);
+    if (track) {
+      // If clicking on currently playing track, toggle play/pause
+      if (currentTrack?.id === trackId) {
+        togglePlayPause();
+      } else {
+        play(track, queue);
+      }
+    }
+  };
+
+  const handlePlayAll = () => {
+    const queue = buildQueue();
+    if (queue.length > 0) {
+      play(queue[0], queue);
+    }
+  };
+
+  const handleShufflePlay = () => {
+    toggleShuffle();
+    handlePlayAll();
+  };
+
+  const isTrackPlaying = (trackId: string) => {
+    return currentTrack?.id === trackId && isPlaying;
+  };
 
   return (
     <div className="min-h-screen pt-24 pb-32">
@@ -162,11 +211,11 @@ const AlbumDetail = () => {
 
               {/* Actions */}
               <div className="flex items-center gap-3 pt-2">
-                <Button size="lg" className="gap-2 neon-glow-red">
+                <Button size="lg" className="gap-2 neon-glow-red" onClick={handlePlayAll}>
                   <Play className="w-5 h-5" fill="currentColor" />
                   Play
                 </Button>
-                <Button size="lg" variant="outline" className="gap-2 glass-panel border-border/50">
+                <Button size="lg" variant="outline" className="gap-2 glass-panel border-border/50" onClick={handleShufflePlay}>
                   <Shuffle className="w-5 h-5" />
                   Shuffle
                 </Button>
@@ -198,63 +247,81 @@ const AlbumDetail = () => {
           {/* Tracks */}
           {album.tracks && album.tracks.length > 0 ? (
             <div className="divide-y divide-border/30">
-              {album.tracks.map((track, index) => (
-                <motion.div
-                  key={track.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.3 + index * 0.03 }}
-                  className="track-row flex items-center gap-2 group cursor-pointer"
-                >
-                  {/* Track Number / Play */}
-                  <div className="w-10 text-center">
-                    <span className="text-muted-foreground group-hover:hidden">
-                      {track.track_number}
-                    </span>
-                    <Play className="w-4 h-4 text-primary hidden group-hover:block mx-auto" />
-                  </div>
+              {album.tracks.map((track, index) => {
+                const isCurrentTrack = currentTrack?.id === track.id;
+                const isCurrentlyPlaying = isTrackPlaying(track.id);
+                const hasAudio = !!track.mp3_url;
 
-                  {/* Title & Artist */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                        {track.title}
-                      </p>
-                      {track.is_hidden_track && (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent">
-                          Hidden
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>{track.artist}</span>
-                      {track.featured_artist && (
+                return (
+                  <motion.div
+                    key={track.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.3 + index * 0.03 }}
+                    onClick={() => hasAudio && handlePlayTrack(track.id)}
+                    className={`track-row flex items-center gap-2 group ${hasAudio ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}
+                  >
+                    {/* Track Number / Play */}
+                    <div className="w-10 text-center">
+                      {isCurrentlyPlaying ? (
+                        <Pause className="w-4 h-4 text-primary mx-auto" />
+                      ) : (
                         <>
-                          <Mic2 className="w-3 h-3" />
-                          <span className="text-primary/80">{track.featured_artist}</span>
+                          <span className={`group-hover:hidden ${isCurrentTrack ? "text-primary" : "text-muted-foreground"}`}>
+                            {track.track_number}
+                          </span>
+                          {hasAudio && <Play className="w-4 h-4 text-primary hidden group-hover:block mx-auto" />}
                         </>
                       )}
                     </div>
-                  </div>
 
-                  {/* Language */}
-                  <div className="w-20 hidden sm:block">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${languageColors[track.lyrics_language] || languageColors.Mixed}`}>
-                      {track.lyrics_language}
+                    {/* Title & Artist */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className={`font-medium truncate transition-colors ${isCurrentTrack ? "text-primary" : "text-foreground group-hover:text-primary"}`}>
+                          {track.title}
+                        </p>
+                        {track.is_hidden_track && (
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent">
+                            Hidden
+                          </span>
+                        )}
+                        {!hasAudio && (
+                          <span className="px-2 py-0.5 text-xs rounded-full bg-muted text-muted-foreground">
+                            No audio
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>{track.artist}</span>
+                        {track.featured_artist && (
+                          <>
+                            <Mic2 className="w-3 h-3" />
+                            <span className="text-primary/80">{track.featured_artist}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Language */}
+                    <div className="w-20 hidden sm:block">
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${languageColors[track.lyrics_language] || languageColors.Mixed}`}>
+                        {track.lyrics_language}
+                      </span>
+                    </div>
+
+                    {/* Duration */}
+                    <span className="text-sm text-muted-foreground w-12 text-right">
+                      {track.duration || "-"}
                     </span>
-                  </div>
 
-                  {/* Duration */}
-                  <span className="text-sm text-muted-foreground w-12 text-right">
-                    {track.duration || "-"}
-                  </span>
-
-                  {/* More Options */}
-                  <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
-                    <MoreHorizontal className="w-5 h-5" />
-                  </button>
-                </motion.div>
-              ))}
+                    {/* More Options */}
+                    <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
+                      <MoreHorizontal className="w-5 h-5" />
+                    </button>
+                  </motion.div>
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
