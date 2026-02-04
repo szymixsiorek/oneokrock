@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAlbum } from "@/hooks/useAlbums";
 import { useAudioPlayer, Track } from "@/contexts/AudioPlayerContext";
+import { getTrackDuration } from "@/data/trackDurations";
 import { 
   ArrowLeft, 
   Play, 
@@ -11,14 +12,16 @@ import {
   Heart,
   MoreHorizontal,
   Mic2,
-  Loader2
+  Loader2,
+  ListPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const AlbumDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { data: album, isLoading, error } = useAlbum(id || "");
-  const { play, currentTrack, isPlaying, togglePlayPause, toggleShuffle } = useAudioPlayer();
+  const { play, currentTrack, isPlaying, togglePlayPause, toggleShuffle, addToQueue } = useAudioPlayer();
 
   if (isLoading) {
     return (
@@ -109,6 +112,24 @@ const AlbumDetail = () => {
 
   const isTrackPlaying = (trackId: string) => {
     return currentTrack?.id === trackId && isPlaying;
+  };
+
+  const handleAddToQueue = (e: React.MouseEvent, trackId: string) => {
+    e.stopPropagation(); // Prevent track from playing
+    const queue = buildQueue();
+    const track = queue.find(t => t.id === trackId);
+    if (track) {
+      addToQueue(track);
+      toast.success(`Added "${track.title}" to queue`);
+    }
+  };
+
+  // Get display duration - use lookup table first, then database value
+  const getDisplayDuration = (track: { title: string; duration: string | null }) => {
+    const lookupDuration = getTrackDuration(track.title);
+    if (lookupDuration) return lookupDuration;
+    if (track.duration && track.duration !== "0:00") return track.duration;
+    return "-";
   };
 
   return (
@@ -312,8 +333,19 @@ const AlbumDetail = () => {
 
                     {/* Duration */}
                     <span className="text-sm text-muted-foreground w-12 text-right">
-                      {track.duration && track.duration !== "0:00" ? track.duration : "-"}
+                      {getDisplayDuration(track)}
                     </span>
+
+                    {/* Add to Queue */}
+                    {hasAudio && (
+                      <button 
+                        onClick={(e) => handleAddToQueue(e, track.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-primary"
+                        title="Add to queue"
+                      >
+                        <ListPlus className="w-5 h-5" />
+                      </button>
+                    )}
 
                     {/* More Options */}
                     <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">

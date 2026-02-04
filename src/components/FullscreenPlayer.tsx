@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import { 
   Play, 
   Pause, 
@@ -9,11 +10,12 @@ import {
   Repeat, 
   Shuffle,
   ChevronDown,
-  ListMusic
+  ListMusic,
+  X
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface FullscreenPlayerProps {
   isOpen: boolean;
@@ -45,9 +47,33 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
     toggleShuffle,
     toggleRepeat,
     play,
+    removeFromQueue,
   } = useAudioPlayer();
 
   const [showQueue, setShowQueue] = useState(false);
+
+  // Handle escape key to close
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isOpen, onClose]);
+
+  // Prevent body scroll when fullscreen is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   const handleProgressChange = (value: number[]) => {
     seek(value[0]);
@@ -63,9 +89,14 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
     }
   };
 
+  const handleRemoveFromQueue = (e: React.MouseEvent, trackId: string) => {
+    e.stopPropagation();
+    removeFromQueue(trackId);
+  };
+
   if (!currentTrack) return null;
 
-  return (
+  const playerContent = (
     <AnimatePresence>
       {isOpen && (
         <motion.div
@@ -73,13 +104,14 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
           transition={{ type: "spring", damping: 30, stiffness: 300 }}
-          className="fixed inset-0 z-[60] bg-background"
+          className="fixed inset-0 z-[9999] bg-background"
+          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
         >
           {/* Background gradient */}
           <div 
             className="absolute inset-0 opacity-30"
             style={{
-              background: `radial-gradient(ellipse at center top, var(--primary) 0%, transparent 70%)`,
+              background: `radial-gradient(ellipse at center top, hsl(var(--primary)) 0%, transparent 70%)`,
             }}
           />
 
@@ -157,7 +189,7 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.03 }}
                             onClick={() => handleQueueTrackClick(track)}
-                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors group ${
                               currentTrack.id === track.id
                                 ? "bg-primary/20 text-primary"
                                 : "hover:bg-secondary/50"
@@ -188,6 +220,15 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                                 {track.artist}
                               </p>
                             </div>
+                            {currentTrack.id !== track.id && (
+                              <button
+                                onClick={(e) => handleRemoveFromQueue(e, track.id)}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive"
+                                title="Remove from queue"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
                           </motion.div>
                         ))}
                       </div>
@@ -301,6 +342,9 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
       )}
     </AnimatePresence>
   );
+
+  // Use portal to render at document body level to avoid z-index issues
+  return createPortal(playerContent, document.body);
 };
 
 export default FullscreenPlayer;
