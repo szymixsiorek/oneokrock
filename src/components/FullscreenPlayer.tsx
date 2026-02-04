@@ -32,7 +32,8 @@ const formatTime = (seconds: number): string => {
 const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
   const {
     currentTrack,
-    queue,
+    priorityQueue,
+    albumContext,
     isPlaying,
     progress,
     duration,
@@ -83,9 +84,12 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
     setVolume(value[0]);
   };
 
-  const handleQueueTrackClick = (track: typeof currentTrack) => {
+  const handleQueueTrackClick = (track: typeof currentTrack, isFromPriorityQueue: boolean) => {
     if (track?.mp3_url) {
       play(track);
+      if (isFromPriorityQueue) {
+        removeFromQueue(track.id);
+      }
     }
   };
 
@@ -95,6 +99,12 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
   };
 
   if (!currentTrack) return null;
+
+  // Get current position in album
+  const currentAlbumIndex = albumContext.findIndex(t => t.id === currentTrack.id);
+  const upcomingAlbumTracks = currentAlbumIndex >= 0 
+    ? albumContext.slice(currentAlbumIndex + 1) 
+    : [];
 
   const playerContent = (
     <AnimatePresence>
@@ -140,11 +150,16 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 onClick={() => setShowQueue(!showQueue)}
-                className={`p-2 rounded-full transition-colors ${
+                className={`p-2 rounded-full transition-colors relative ${
                   showQueue ? "bg-primary text-primary-foreground" : "bg-secondary/50 hover:bg-secondary"
                 }`}
               >
                 <ListMusic className="w-6 h-6" />
+                {priorityQueue.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium border-2 border-background">
+                    {priorityQueue.length}
+                  </span>
+                )}
               </motion.button>
             </div>
 
@@ -178,59 +193,83 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                     className="w-full md:w-80 lg:w-96 h-64 md:h-80 overflow-hidden"
                   >
                     <div className="glass-panel rounded-2xl h-full p-4 overflow-y-auto">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-                        Queue • {queue.length} tracks
+                      {/* Priority Queue Section */}
+                      {priorityQueue.length > 0 && (
+                        <>
+                          <h3 className="text-sm font-semibold text-primary uppercase tracking-wider mb-3">
+                            Up Next • {priorityQueue.length} {priorityQueue.length === 1 ? 'track' : 'tracks'}
+                          </h3>
+                          <div className="space-y-1 mb-4">
+                            {priorityQueue.map((track, index) => (
+                              <motion.div
+                                key={`pq-${track.id}`}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.03 }}
+                                onClick={() => handleQueueTrackClick(track, true)}
+                                className="flex items-center gap-3 p-2 rounded-lg cursor-pointer bg-primary/10 hover:bg-primary/20 transition-colors group"
+                              >
+                                <div className="w-8 h-8 rounded overflow-hidden flex-shrink-0">
+                                  <img
+                                    src={track.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop"}
+                                    alt={track.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate text-foreground">
+                                    {track.title}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {track.artist}
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={(e) => handleRemoveFromQueue(e, track.id)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive"
+                                  title="Remove from queue"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Album Context Section */}
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                        From Album • {upcomingAlbumTracks.length} remaining
                       </h3>
                       <div className="space-y-1">
-                        {queue.map((track, index) => (
-                          <motion.div
-                            key={track.id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.03 }}
-                            onClick={() => handleQueueTrackClick(track)}
-                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors group ${
-                              currentTrack.id === track.id
-                                ? "bg-primary/20 text-primary"
-                                : "hover:bg-secondary/50"
-                            }`}
-                          >
-                            <span className="w-6 text-center text-sm text-muted-foreground">
-                              {currentTrack.id === track.id ? (
-                                isPlaying ? (
-                                  <div className="flex items-center justify-center gap-0.5">
-                                    <span className="w-0.5 h-3 bg-primary animate-pulse" />
-                                    <span className="w-0.5 h-2 bg-primary animate-pulse delay-75" />
-                                    <span className="w-0.5 h-3 bg-primary animate-pulse delay-150" />
-                                  </div>
-                                ) : (
-                                  <Pause className="w-4 h-4" />
-                                )
-                              ) : (
-                                index + 1
-                              )}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm font-medium truncate ${
-                                currentTrack.id === track.id ? "text-primary" : "text-foreground"
-                              }`}>
-                                {track.title}
-                              </p>
-                              <p className="text-xs text-muted-foreground truncate">
-                                {track.artist}
-                              </p>
-                            </div>
-                            {currentTrack.id !== track.id && (
-                              <button
-                                onClick={(e) => handleRemoveFromQueue(e, track.id)}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive"
-                                title="Remove from queue"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </motion.div>
-                        ))}
+                        {upcomingAlbumTracks.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            End of album
+                          </p>
+                        ) : (
+                          upcomingAlbumTracks.slice(0, 10).map((track, index) => (
+                            <motion.div
+                              key={`ac-${track.id}`}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: (priorityQueue.length + index) * 0.03 }}
+                              onClick={() => handleQueueTrackClick(track, false)}
+                              className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors"
+                            >
+                              <span className="w-6 text-center text-sm text-muted-foreground">
+                                {currentAlbumIndex + index + 2}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate text-foreground">
+                                  {track.title}
+                                </p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {track.artist}
+                                </p>
+                              </div>
+                            </motion.div>
+                          ))
+                        )}
                       </div>
                     </div>
                   </motion.div>
