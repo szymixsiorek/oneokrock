@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { 
   Play, 
@@ -9,7 +9,9 @@ import {
   Repeat, 
   Shuffle,
   VolumeX,
-  Maximize2
+  Maximize2,
+  ListMusic,
+  X
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
@@ -24,9 +26,11 @@ const formatTime = (seconds: number): string => {
 
 const PlayerBar = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
   
   const {
     currentTrack,
+    priorityQueue,
     isPlaying,
     progress,
     duration,
@@ -40,6 +44,8 @@ const PlayerBar = () => {
     setVolume,
     toggleShuffle,
     toggleRepeat,
+    removeFromQueue,
+    play,
   } = useAudioPlayer();
 
   // If no track, show minimal placeholder
@@ -68,129 +74,223 @@ const PlayerBar = () => {
     setVolume(value[0]);
   };
 
+  const handleQueueTrackClick = (track: typeof currentTrack) => {
+    if (track?.mp3_url) {
+      play(track);
+      removeFromQueue(track.id);
+    }
+  };
+
   return (
-    <motion.div
-      initial={{ y: 100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.5, delay: 0.3 }}
-      className="fixed bottom-0 left-0 right-0 z-50 player-bar"
-    >
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex items-center gap-4">
-          {/* Track Info - clickable to expand */}
-          <div 
-            className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer group"
-            onClick={() => setIsFullscreen(true)}
-          >
-            <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 group-hover:ring-2 ring-primary/50 transition-all">
-              <img
-                src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop"}
-                alt={currentTrack.title}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="min-w-0">
-              <p className="font-medium text-foreground text-sm truncate group-hover:text-primary transition-colors">
-                {currentTrack.title}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {currentTrack.artist}
-              </p>
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div className="flex flex-col items-center gap-2 flex-1">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={toggleShuffle}
-                className={`transition-colors ${isShuffled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <Shuffle className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={previous}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <SkipBack className="w-5 h-5" />
-              </button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={togglePlayPause}
-                className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground"
-              >
-                {isPlaying ? (
-                  <Pause className="w-5 h-5" />
-                ) : (
-                  <Play className="w-5 h-5 ml-0.5" />
-                )}
-              </motion.button>
-              <button 
-                onClick={next}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <SkipForward className="w-5 h-5" />
-              </button>
-              <button 
-                onClick={toggleRepeat}
-                className={`transition-colors ${isRepeating ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              >
-                <Repeat className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full max-w-md flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-10 text-right">
-                {formatTime(progress)}
-              </span>
-              <Slider
-                value={[progress]}
-                onValueChange={handleProgressChange}
-                max={duration || 100}
-                step={0.1}
-                className="flex-1"
-              />
-              <span className="text-xs text-muted-foreground w-10">
-                {formatTime(duration)}
-              </span>
-            </div>
-          </div>
-
-          {/* Volume & Expand */}
-          <div className="flex items-center gap-3 flex-1 justify-end">
-            <div className="flex items-center gap-2 w-28 hidden sm:flex">
-              {volume === 0 ? (
-                <VolumeX className="w-4 h-4 text-muted-foreground" />
-              ) : (
-                <Volume2 className="w-4 h-4 text-muted-foreground" />
-              )}
-              <Slider
-                value={[volume]}
-                onValueChange={handleVolumeChange}
-                max={100}
-                step={1}
-                className="flex-1"
-              />
-            </div>
-            <button
+    <>
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+        className="fixed bottom-0 left-0 right-0 z-50 player-bar"
+      >
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center gap-4">
+            {/* Track Info - clickable to expand */}
+            <div 
+              className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer group"
               onClick={() => setIsFullscreen(true)}
-              className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              title="Expand player"
             >
-              <Maximize2 className="w-4 h-4" />
-            </button>
+              <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 group-hover:ring-2 ring-primary/50 transition-all">
+                <img
+                  src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop"}
+                  alt={currentTrack.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium text-foreground text-sm truncate group-hover:text-primary transition-colors">
+                  {currentTrack.title}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {currentTrack.artist}
+                </p>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex flex-col items-center gap-2 flex-1">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={toggleShuffle}
+                  className={`transition-colors ${isShuffled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Shuffle className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={previous}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <SkipBack className="w-5 h-5" />
+                </button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={togglePlayPause}
+                  className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-primary-foreground"
+                >
+                  {isPlaying ? (
+                    <Pause className="w-5 h-5" />
+                  ) : (
+                    <Play className="w-5 h-5 ml-0.5" />
+                  )}
+                </motion.button>
+                <button 
+                  onClick={next}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <SkipForward className="w-5 h-5" />
+                </button>
+                <button 
+                  onClick={toggleRepeat}
+                  className={`transition-colors ${isRepeating ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Repeat className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full max-w-md flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-10 text-right">
+                  {formatTime(progress)}
+                </span>
+                <Slider
+                  value={[progress]}
+                  onValueChange={handleProgressChange}
+                  max={duration || 100}
+                  step={0.1}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground w-10">
+                  {formatTime(duration)}
+                </span>
+              </div>
+            </div>
+
+            {/* Volume, Queue & Expand */}
+            <div className="flex items-center gap-3 flex-1 justify-end">
+              <div className="flex items-center gap-2 w-28 hidden sm:flex">
+                {volume === 0 ? (
+                  <VolumeX className="w-4 h-4 text-muted-foreground" />
+                ) : (
+                  <Volume2 className="w-4 h-4 text-muted-foreground" />
+                )}
+                <Slider
+                  value={[volume]}
+                  onValueChange={handleVolumeChange}
+                  max={100}
+                  step={1}
+                  className="flex-1"
+                />
+              </div>
+              
+              {/* Queue Button */}
+              <button
+                onClick={() => setShowQueue(!showQueue)}
+                className={`p-2 relative transition-colors ${
+                  showQueue ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Queue"
+              >
+                <ListMusic className="w-4 h-4" />
+                {priorityQueue.length > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-medium">
+                    {priorityQueue.length}
+                  </span>
+                )}
+              </button>
+              
+              <button
+                onClick={() => setIsFullscreen(true)}
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                title="Expand player"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+
+        {/* Queue Panel Dropdown */}
+        <AnimatePresence>
+          {showQueue && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="absolute bottom-full right-4 mb-2 w-80 max-h-96 overflow-hidden"
+            >
+              <div className="glass-panel rounded-xl p-4 shadow-xl border border-border/50">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Up Next
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {priorityQueue.length} {priorityQueue.length === 1 ? 'track' : 'tracks'}
+                  </span>
+                </div>
+                
+                {priorityQueue.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    Queue is empty. Add songs using the + button.
+                  </p>
+                ) : (
+                  <div className="space-y-1 max-h-72 overflow-y-auto">
+                    {priorityQueue.map((track, index) => (
+                      <motion.div
+                        key={track.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.03 }}
+                        onClick={() => handleQueueTrackClick(track)}
+                        className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors group"
+                      >
+                        <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0">
+                          <img
+                            src={track.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop"}
+                            alt={track.title}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate text-foreground">
+                            {track.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {track.artist}
+                          </p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromQueue(track.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive"
+                          title="Remove from queue"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
       
       {/* Fullscreen Player */}
       <FullscreenPlayer 
         isOpen={isFullscreen} 
         onClose={() => setIsFullscreen(false)} 
       />
-    </motion.div>
+    </>
   );
 };
 
