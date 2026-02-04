@@ -29,6 +29,9 @@ interface AudioPlayerContextType {
   setVolume: (volume: number) => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
+  addToQueue: (track: Track) => void;
+  clearQueue: () => void;
+  removeFromQueue: (trackId: string) => void;
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextType | null>(null);
@@ -199,6 +202,32 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setIsRepeating(prev => !prev);
   }, []);
 
+  const addToQueue = useCallback((track: Track) => {
+    setQueue(prev => {
+      // Don't add duplicates
+      if (prev.some(t => t.id === track.id)) {
+        return prev;
+      }
+      return [...prev, track];
+    });
+    setOriginalQueue(prev => {
+      if (prev.some(t => t.id === track.id)) {
+        return prev;
+      }
+      return [...prev, track];
+    });
+  }, []);
+
+  const clearQueue = useCallback(() => {
+    setQueue([]);
+    setOriginalQueue([]);
+  }, []);
+
+  const removeFromQueue = useCallback((trackId: string) => {
+    setQueue(prev => prev.filter(t => t.id !== trackId));
+    setOriginalQueue(prev => prev.filter(t => t.id !== trackId));
+  }, []);
+
   return (
     <AudioPlayerContext.Provider
       value={{
@@ -219,6 +248,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setVolume,
         toggleShuffle,
         toggleRepeat,
+        addToQueue,
+        clearQueue,
+        removeFromQueue,
       }}
     >
       {children}

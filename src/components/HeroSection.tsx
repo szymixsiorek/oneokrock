@@ -78,10 +78,12 @@ const HeroSection = () => {
                 Browse Albums
               </Button>
             </Link>
-            <Button variant="outline" size="lg" className="gap-2 glass-panel border-border/50">
-              <Globe className="w-5 h-5" />
-              Learn More
-            </Button>
+            <Link to="/learn-more">
+              <Button variant="outline" size="lg" className="gap-2 glass-panel border-border/50">
+                <Globe className="w-5 h-5" />
+                Learn More
+              </Button>
+            </Link>
           </motion.div>
 
           {/* Stats */}
@@ -89,29 +91,29 @@ const HeroSection = () => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.8 }}
-            className="grid grid-cols-3 gap-8 pt-12 max-w-lg mx-auto"
+            className="grid grid-cols-3 gap-8 pt-12 max-w-lg mx-auto relative z-20"
           >
             {[
               { value: "10+", label: "Albums" },
               { value: "100+", label: "Tracks" },
               { value: "2007", label: "Since" },
-            ].map((stat, index) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-3xl sm:text-4xl font-bold gradient-text">
+            ].map((stat) => (
+              <div key={stat.label} className="text-center relative z-20">
+                <p className="text-3xl sm:text-4xl font-bold gradient-text relative z-20">
                   {stat.value}
                 </p>
-                <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
+                <p className="text-sm text-muted-foreground mt-1 relative z-20">{stat.label}</p>
               </div>
             ))}
           </motion.div>
         </motion.div>
 
-        {/* Floating Album Covers Preview */}
+        {/* Floating Album Covers Preview - lowered z-index */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 1 }}
-          className="absolute -bottom-20 left-1/2 -translate-x-1/2 flex gap-4 opacity-30"
+          className="absolute -bottom-20 left-1/2 -translate-x-1/2 flex gap-4 opacity-20 z-0 pointer-events-none"
         >
           {[1, 2, 3, 4, 5].map((i) => (
             <motion.div
