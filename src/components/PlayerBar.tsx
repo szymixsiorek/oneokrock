@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
   Play, 
   Pause, 
@@ -27,6 +27,8 @@ const formatTime = (seconds: number): string => {
 const PlayerBar = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const queuePanelRef = useRef<HTMLDivElement>(null);
+  const queueButtonRef = useRef<HTMLButtonElement>(null);
   
   const {
     currentTrack,
@@ -47,6 +49,21 @@ const PlayerBar = () => {
     removeFromQueue,
     play,
   } = useAudioPlayer();
+
+  // Click outside to close queue panel
+  useEffect(() => {
+    if (!showQueue) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        queuePanelRef.current && !queuePanelRef.current.contains(e.target as Node) &&
+        queueButtonRef.current && !queueButtonRef.current.contains(e.target as Node)
+      ) {
+        setShowQueue(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showQueue]);
 
   // If no track, show minimal placeholder
   if (!currentTrack) {
@@ -83,6 +100,72 @@ const PlayerBar = () => {
 
   return (
     <>
+      {/* Queue Panel - rendered as fixed element OUTSIDE the player bar */}
+      <AnimatePresence>
+        {showQueue && (
+          <motion.div
+            ref={queuePanelRef}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-[88px] right-4 z-[60] w-80 max-h-96 rounded-xl border border-border shadow-2xl bg-background overflow-hidden"
+          >
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">Up Next</h3>
+                <span className="text-xs text-muted-foreground">
+                  {priorityQueue.length} {priorityQueue.length === 1 ? "track" : "tracks"}
+                </span>
+              </div>
+
+              {priorityQueue.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Queue is empty. Add songs using the + button.
+                </p>
+              ) : (
+                <div className="space-y-1 max-h-72 overflow-y-auto">
+                  {priorityQueue.map((track, index) => (
+                    <div
+                      key={track.id}
+                      onClick={() => handleQueueTrackClick(track)}
+                      className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors group"
+                    >
+                      <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0">
+                        <img
+                          src={track.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop"}
+                          alt={track.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate text-foreground">
+                          {track.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {track.artist}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFromQueue(track.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive"
+                        title="Remove from queue"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Player Bar */}
       <motion.div
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -191,7 +274,8 @@ const PlayerBar = () => {
               
               {/* Queue Button */}
               <button
-                onClick={() => setShowQueue(!showQueue)}
+                ref={queueButtonRef}
+                onClick={() => setShowQueue(prev => !prev)}
                 className={`p-2 relative transition-colors ${
                   showQueue ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -215,74 +299,6 @@ const PlayerBar = () => {
             </div>
           </div>
         </div>
-
-        {/* Queue Panel Dropdown */}
-        <AnimatePresence>
-          {showQueue && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-full right-4 mb-2 w-80 max-h-96 overflow-hidden"
-            >
-              <div className="rounded-xl p-4 shadow-xl border border-border/50 bg-background/95 backdrop-blur-xl">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Up Next
-                  </h3>
-                  <span className="text-xs text-muted-foreground">
-                    {priorityQueue.length} {priorityQueue.length === 1 ? 'track' : 'tracks'}
-                  </span>
-                </div>
-                
-                {priorityQueue.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">
-                    Queue is empty. Add songs using the + button.
-                  </p>
-                ) : (
-                  <div className="space-y-1 max-h-72 overflow-y-auto">
-                    {priorityQueue.map((track, index) => (
-                      <motion.div
-                        key={track.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.03 }}
-                        onClick={() => handleQueueTrackClick(track)}
-                        className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-secondary/50 transition-colors group"
-                      >
-                        <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0">
-                          <img
-                            src={track.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop"}
-                            alt={track.title}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate text-foreground">
-                            {track.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {track.artist}
-                          </p>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeFromQueue(track.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-destructive"
-                          title="Remove from queue"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </motion.div>
       
       {/* Fullscreen Player */}
