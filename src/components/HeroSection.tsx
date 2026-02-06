@@ -108,29 +108,6 @@ const HeroSection = () => {
           </motion.div>
         </motion.div>
 
-        {/* Floating Album Covers Preview - lowered z-index */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1, delay: 1 }}
-          className="absolute -bottom-20 left-1/2 -translate-x-1/2 flex gap-4 opacity-20 z-0 pointer-events-none"
-        >
-          {[1, 2, 3, 4, 5].map((i) => (
-            <motion.div
-              key={i}
-              animate={{
-                y: [0, -10, 0],
-              }}
-              transition={{
-                duration: 4,
-                delay: i * 0.2,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-              className="w-24 h-24 rounded-lg bg-secondary/50 glass-panel"
-            />
-          ))}
-        </motion.div>
       </div>
     </section>
   );

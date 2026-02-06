@@ -10,7 +10,7 @@ import {
   Clock, 
   Shuffle, 
   Heart,
-  MoreHorizontal,
+  
   Mic2,
   Loader2,
   ListPlus
@@ -347,10 +347,6 @@ const AlbumDetail = () => {
                       </button>
                     )}
 
-                    {/* More Options */}
-                    <button className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground">
-                      <MoreHorizontal className="w-5 h-5" />
-                    </button>
                   </motion.div>
                 );
               })}

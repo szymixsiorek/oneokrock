@@ -11,9 +11,12 @@ const Albums = () => {
   const [filter, setFilter] = useState<EditionFilter>("all");
   const { data: albums, isLoading } = useAlbums();
 
-  const filteredAlbums = filter === "all" 
+  const allFiltered = filter === "all" 
     ? albums 
     : albums?.filter((album) => album.edition_type === filter);
+
+  const filteredAlbums = allFiltered?.filter((album) => (album as any).release_type !== "Single");
+  const filteredSingles = allFiltered?.filter((album) => (album as any).release_type === "Single");
 
   const filters: { value: EditionFilter; label: string }[] = [
     { value: "all", label: "All" },
@@ -93,8 +96,37 @@ const Albums = () => {
           </div>
         )}
 
+        {/* Singles Section */}
+        {!isLoading && filteredSingles && filteredSingles.length > 0 && (
+          <div className="mt-16">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="mb-8"
+            >
+              <h2 className="text-2xl font-bold text-foreground mb-1">Singles</h2>
+              <p className="text-muted-foreground text-sm">Individual releases & standalone tracks</p>
+            </motion.div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {filteredSingles.map((album, index) => (
+                <AlbumCard
+                  key={album.id}
+                  id={album.id}
+                  title={album.title}
+                  coverUrl={album.cover_url || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
+                  releaseDate={album.release_date || new Date().toISOString()}
+                  editionType={album.edition_type}
+                  trackCount={album.tracks?.length || 0}
+                  index={index}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
-        {!isLoading && (!filteredAlbums || filteredAlbums.length === 0) && (
+        {!isLoading && (!allFiltered || allFiltered.length === 0) && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

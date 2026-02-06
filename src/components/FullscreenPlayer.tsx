@@ -11,11 +11,14 @@ import {
   Shuffle,
   ChevronDown,
   ListMusic,
-  X
+  X,
+  BookOpen,
+  Loader2
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useState, useEffect } from "react";
+import { fetchLyrics } from "@/services/LyricsService";
 
 interface FullscreenPlayerProps {
   isOpen: boolean;
@@ -52,6 +55,36 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
   } = useAudioPlayer();
 
   const [showQueue, setShowQueue] = useState(false);
+  const [showLyrics, setShowLyrics] = useState(false);
+  const [lyrics, setLyrics] = useState<string | null>(null);
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [lyricsError, setLyricsError] = useState<string | null>(null);
+
+  // Fetch lyrics when track changes or lyrics panel opens
+  useEffect(() => {
+    if (!showLyrics || !currentTrack) {
+      return;
+    }
+
+    let cancelled = false;
+    setLyricsLoading(true);
+    setLyrics(null);
+    setLyricsError(null);
+
+    fetchLyrics(currentTrack.artist, currentTrack.title).then((result) => {
+      if (cancelled) return;
+      setLyricsLoading(false);
+      if (result.lyrics) {
+        setLyrics(result.lyrics);
+      } else {
+        setLyricsError(result.error || "Lyrics not available");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showLyrics, currentTrack?.id]);
 
   // Handle escape key to close
   useEffect(() => {
@@ -146,41 +179,76 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                 </p>
               </div>
 
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => setShowQueue(!showQueue)}
-                className={`p-2 rounded-full transition-colors relative ${
-                  showQueue ? "bg-primary text-primary-foreground" : "bg-secondary/50 hover:bg-secondary"
-                }`}
-              >
-                <ListMusic className="w-6 h-6" />
-                {priorityQueue.length > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium border-2 border-background">
-                    {priorityQueue.length}
-                  </span>
-                )}
-              </motion.button>
+              <div className="flex items-center gap-2">
+                {/* Lyrics Toggle */}
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { setShowLyrics(!showLyrics); if (!showLyrics) setShowQueue(false); }}
+                  className={`p-2 rounded-full transition-colors ${
+                    showLyrics ? "bg-primary text-primary-foreground" : "bg-secondary/50 hover:bg-secondary"
+                  }`}
+                >
+                  <BookOpen className="w-6 h-6" />
+                </motion.button>
+
+                {/* Queue Toggle */}
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => { setShowQueue(!showQueue); if (!showQueue) setShowLyrics(false); }}
+                  className={`p-2 rounded-full transition-colors relative ${
+                    showQueue ? "bg-primary text-primary-foreground" : "bg-secondary/50 hover:bg-secondary"
+                  }`}
+                >
+                  <ListMusic className="w-6 h-6" />
+                  {priorityQueue.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-medium border-2 border-background">
+                      {priorityQueue.length}
+                    </span>
+                  )}
+                </motion.button>
+              </div>
             </div>
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-8 px-4 md:px-8 overflow-hidden">
-              {/* Album Art */}
+              {/* Album Art or Lyrics */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.1 }}
                 className={`flex-shrink-0 transition-all duration-300 ${
-                  showQueue ? "w-48 h-48 md:w-64 md:h-64" : "w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96"
+                  showQueue || showLyrics ? "w-48 h-48 md:w-64 md:h-64" : "w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96"
                 }`}
               >
-                <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl shadow-primary/20">
-                  <img
-                    src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
-                    alt={currentTrack.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                {showLyrics ? (
+                  <div className="w-full h-full rounded-2xl overflow-hidden glass-panel p-4">
+                    {lyricsLoading ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                      </div>
+                    ) : lyricsError ? (
+                      <div className="w-full h-full flex items-center justify-center text-center">
+                        <p className="text-muted-foreground text-sm">{lyricsError}</p>
+                      </div>
+                    ) : (
+                      <div className="w-full h-full overflow-y-auto">
+                        <pre className="whitespace-pre-wrap text-sm text-foreground leading-relaxed font-[Inter,'Noto_Sans_JP',sans-serif]">
+                          {lyrics}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl shadow-primary/20">
+                    <img
+                      src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
+                      alt={currentTrack.title}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
               </motion.div>
 
               {/* Queue Panel */}
@@ -382,7 +450,6 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
     </AnimatePresence>
   );
 
-  // Use portal to render at document body level to avoid z-index issues
   return createPortal(playerContent, document.body);
 };
 
