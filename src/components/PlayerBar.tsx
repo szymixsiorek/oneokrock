@@ -225,7 +225,7 @@ const PlayerBar = () => {
               exit={{ opacity: 0, y: 10 }}
               className="absolute bottom-full right-4 mb-2 w-80 max-h-96 overflow-hidden"
             >
-              <div className="glass-panel rounded-xl p-4 shadow-xl border border-border/50">
+              <div className="rounded-xl p-4 shadow-xl border border-border/50 bg-background/95 backdrop-blur-xl">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-foreground">
                     Up Next
