@@ -23,6 +23,7 @@ export type Database = {
           edition_type: Database["public"]["Enums"]["edition_type"]
           id: string
           release_date: string | null
+          release_type: string
           title: string
           updated_at: string
         }
@@ -34,6 +35,7 @@ export type Database = {
           edition_type?: Database["public"]["Enums"]["edition_type"]
           id?: string
           release_date?: string | null
+          release_type?: string
           title: string
           updated_at?: string
         }
@@ -45,6 +47,7 @@ export type Database = {
           edition_type?: Database["public"]["Enums"]["edition_type"]
           id?: string
           release_date?: string | null
+          release_type?: string
           title?: string
           updated_at?: string
         }

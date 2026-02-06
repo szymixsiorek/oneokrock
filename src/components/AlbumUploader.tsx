@@ -34,6 +34,7 @@ const AlbumUploader = () => {
   const [albumTitle, setAlbumTitle] = useState("");
   const [albumDescription, setAlbumDescription] = useState("");
   const [editionType, setEditionType] = useState<"Japanese" | "International" | "Deluxe">("Japanese");
+  const [releaseType, setReleaseType] = useState<"Album" | "Single">("Album");
   const [releaseDate, setReleaseDate] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -182,10 +183,11 @@ const AlbumUploader = () => {
         title: albumTitle,
         description: albumDescription || null,
         edition_type: editionType,
+        release_type: releaseType,
         release_date: releaseDate || null,
         cover_url: coverUrl,
         accent_color: "#ff0033",
-      });
+      } as any);
 
       // Upload tracks in batches of 5
       const BATCH_SIZE = 5;
@@ -332,6 +334,19 @@ const AlbumUploader = () => {
                 onChange={(e) => setAlbumTitle(e.target.value)}
                 className="bg-secondary/50"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="releaseType">Release Type</Label>
+              <Select value={releaseType} onValueChange={(v: any) => setReleaseType(v)}>
+                <SelectTrigger className="bg-secondary/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Album">Album</SelectItem>
+                  <SelectItem value="Single">Single</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
