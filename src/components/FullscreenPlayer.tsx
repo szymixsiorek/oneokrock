@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
-import { useState, useEffect } from "react";
-import { fetchLyrics } from "@/services/LyricsService";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { fetchLyrics, SyncedLine } from "@/services/LyricsService";
 
 interface FullscreenPlayerProps {
   isOpen: boolean;
@@ -56,35 +56,57 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
 
   const [showQueue, setShowQueue] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
-  const [lyrics, setLyrics] = useState<string | null>(null);
+  const [plainLyrics, setPlainLyrics] = useState<string | null>(null);
+  const [syncedLines, setSyncedLines] = useState<SyncedLine[] | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [lyricsError, setLyricsError] = useState<string | null>(null);
+  const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const activeLineRef = useRef<HTMLParagraphElement>(null);
 
   // Fetch lyrics when track changes or lyrics panel opens
   useEffect(() => {
-    if (!showLyrics || !currentTrack) {
-      return;
-    }
+    if (!showLyrics || !currentTrack) return;
 
     let cancelled = false;
     setLyricsLoading(true);
-    setLyrics(null);
+    setPlainLyrics(null);
+    setSyncedLines(null);
     setLyricsError(null);
 
     fetchLyrics(currentTrack.artist, currentTrack.title).then((result) => {
       if (cancelled) return;
       setLyricsLoading(false);
-      if (result.lyrics) {
-        setLyrics(result.lyrics);
+      if (result.syncedLyrics) {
+        setSyncedLines(result.syncedLyrics);
+      } else if (result.plainLyrics) {
+        setPlainLyrics(result.plainLyrics);
       } else {
-        setLyricsError(result.error || "Lyrics not available");
+        setLyricsError(result.error || "No lyrics found for this track.");
       }
     });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [showLyrics, currentTrack?.id]);
+
+  // Get active synced line index
+  const getActiveLineIndex = useCallback(() => {
+    if (!syncedLines) return -1;
+    let idx = -1;
+    for (let i = 0; i < syncedLines.length; i++) {
+      if (syncedLines[i].time <= progress) idx = i;
+      else break;
+    }
+    return idx;
+  }, [syncedLines, progress]);
+
+  const activeLineIndex = syncedLines ? getActiveLineIndex() : -1;
+
+  // Auto-scroll to active line
+  useEffect(() => {
+    if (activeLineRef.current && lyricsContainerRef.current) {
+      activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeLineIndex]);
 
   // Handle escape key to close
   useEffect(() => {
@@ -223,7 +245,7 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                 }`}
               >
                 {showLyrics ? (
-                  <div className="w-full h-full rounded-2xl overflow-hidden glass-panel p-4">
+                  <div className="w-full h-full rounded-2xl overflow-hidden bg-secondary/30 backdrop-blur-sm border border-border/30 p-6">
                     {lyricsLoading ? (
                       <div className="w-full h-full flex items-center justify-center">
                         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -232,10 +254,31 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                       <div className="w-full h-full flex items-center justify-center text-center">
                         <p className="text-muted-foreground text-sm">{lyricsError}</p>
                       </div>
+                    ) : syncedLines ? (
+                      <div ref={lyricsContainerRef} className="w-full h-full overflow-y-auto scrollbar-thin">
+                        <div className="space-y-2 py-4">
+                          {syncedLines.map((line, i) => (
+                            <p
+                              key={i}
+                              ref={i === activeLineIndex ? activeLineRef : null}
+                              className={`text-center leading-[1.6] transition-all duration-300 font-[Inter,'Noto_Sans_JP',sans-serif] cursor-pointer ${
+                                i === activeLineIndex
+                                  ? "text-primary text-lg font-semibold scale-105"
+                                  : i < activeLineIndex
+                                  ? "text-muted-foreground/50 text-sm"
+                                  : "text-foreground/70 text-sm"
+                              }`}
+                              onClick={() => seek(line.time)}
+                            >
+                              {line.text || "♪"}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
                     ) : (
-                      <div className="w-full h-full overflow-y-auto">
-                        <pre className="whitespace-pre-wrap text-sm text-foreground leading-relaxed font-[Inter,'Noto_Sans_JP',sans-serif]">
-                          {lyrics}
+                      <div className="w-full h-full overflow-y-auto scrollbar-thin">
+                        <pre className="whitespace-pre-wrap text-sm text-foreground/80 leading-[1.6] text-center font-[Inter,'Noto_Sans_JP',sans-serif]">
+                          {plainLyrics}
                         </pre>
                       </div>
                     )}
