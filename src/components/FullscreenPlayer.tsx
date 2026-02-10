@@ -73,7 +73,7 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
     setSyncedLines(null);
     setLyricsError(null);
 
-    fetchLyrics(currentTrack.artist, currentTrack.title).then((result) => {
+    fetchLyrics(currentTrack.artist, currentTrack.title, currentTrack.duration).then((result) => {
       if (cancelled) return;
       setLyricsLoading(false);
       if (result.syncedLyrics) {
