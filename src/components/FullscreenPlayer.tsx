@@ -234,64 +234,98 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-8 px-4 md:px-8 overflow-hidden">
-              {/* Album Art or Lyrics */}
+            <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-8 px-4 md:px-8 overflow-hidden relative">
+              
+              {/* Immersive Lyrics Overlay */}
+              <AnimatePresence>
+                {showLyrics && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="absolute inset-0 z-10 flex items-center justify-center"
+                  >
+                    {/* Dark overlay for contrast */}
+                    <div className="absolute inset-0 bg-black/40" />
+
+                    <div className="relative w-full max-w-4xl mx-auto h-[65vh] flex items-center justify-center px-4">
+                      {lyricsLoading ? (
+                        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                      ) : lyricsError ? (
+                        <p className="text-white/60 text-xl font-medium font-[Inter,'Noto_Sans_JP',sans-serif]">{lyricsError}</p>
+                      ) : syncedLines ? (
+                        <div
+                          ref={lyricsContainerRef}
+                          className="w-full h-full overflow-y-auto scrollbar-none"
+                          style={{
+                            maskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                          }}
+                        >
+                          {/* Spacer to allow first line to center */}
+                          <div className="h-[30vh]" />
+                          <div className="space-y-6 py-4">
+                            {syncedLines.map((line, i) => (
+                              <p
+                                key={i}
+                                ref={i === activeLineIndex ? activeLineRef : null}
+                                className={`text-center leading-[1.5] font-[Inter,'Noto_Sans_JP',sans-serif] cursor-pointer transition-all duration-500 ease-out ${
+                                  i === activeLineIndex
+                                    ? "text-white text-3xl md:text-4xl font-bold scale-105 blur-0"
+                                    : "text-white/40 text-xl md:text-2xl font-medium blur-[0.5px]"
+                                }`}
+                                style={{
+                                  transform: i === activeLineIndex ? "scale(1.05)" : "scale(1)",
+                                  transition: "all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1)",
+                                }}
+                                onClick={() => seek(line.time)}
+                              >
+                                {line.text || "♪"}
+                              </p>
+                            ))}
+                          </div>
+                          {/* Spacer to allow last line to center */}
+                          <div className="h-[30vh]" />
+                        </div>
+                      ) : plainLyrics ? (
+                        <div
+                          className="w-full h-full overflow-y-auto scrollbar-none"
+                          style={{
+                            maskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
+                          }}
+                        >
+                          <div className="h-[15vh]" />
+                          <pre className="whitespace-pre-wrap text-xl md:text-2xl text-white/70 leading-[1.8] text-center font-[Inter,'Noto_Sans_JP',sans-serif] font-medium">
+                            {plainLyrics}
+                          </pre>
+                          <div className="h-[15vh]" />
+                        </div>
+                      ) : null}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Album Art (hidden when lyrics active) */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 }}
+                animate={{ opacity: showLyrics ? 0 : 1, scale: showLyrics ? 0.8 : 1 }}
+                transition={{ duration: 0.4 }}
                 className={`flex-shrink-0 transition-all duration-300 ${
-                  showQueue || showLyrics ? "w-48 h-48 md:w-64 md:h-64" : "w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96"
+                  showLyrics ? "pointer-events-none absolute" : ""
+                } ${
+                  showQueue ? "w-48 h-48 md:w-64 md:h-64" : "w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96"
                 }`}
               >
-                {showLyrics ? (
-                  <div className="w-full h-full rounded-2xl overflow-hidden bg-secondary/30 backdrop-blur-sm border border-border/30 p-6">
-                    {lyricsLoading ? (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                      </div>
-                    ) : lyricsError ? (
-                      <div className="w-full h-full flex items-center justify-center text-center">
-                        <p className="text-muted-foreground text-sm">{lyricsError}</p>
-                      </div>
-                    ) : syncedLines ? (
-                      <div ref={lyricsContainerRef} className="w-full h-full overflow-y-auto scrollbar-thin">
-                        <div className="space-y-2 py-4">
-                          {syncedLines.map((line, i) => (
-                            <p
-                              key={i}
-                              ref={i === activeLineIndex ? activeLineRef : null}
-                              className={`text-center leading-[1.6] transition-all duration-300 font-[Inter,'Noto_Sans_JP',sans-serif] cursor-pointer ${
-                                i === activeLineIndex
-                                  ? "text-primary text-lg font-semibold scale-105"
-                                  : i < activeLineIndex
-                                  ? "text-muted-foreground/50 text-sm"
-                                  : "text-foreground/70 text-sm"
-                              }`}
-                              onClick={() => seek(line.time)}
-                            >
-                              {line.text || "♪"}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="w-full h-full overflow-y-auto scrollbar-thin">
-                        <pre className="whitespace-pre-wrap text-sm text-foreground/80 leading-[1.6] text-center font-[Inter,'Noto_Sans_JP',sans-serif]">
-                          {plainLyrics}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl shadow-primary/20">
-                    <img
-                      src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
-                      alt={currentTrack.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
+                <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl shadow-primary/20">
+                  <img
+                    src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
+                    alt={currentTrack.title}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
               </motion.div>
 
               {/* Queue Panel */}
