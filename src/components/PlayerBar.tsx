@@ -171,6 +171,7 @@ const PlayerBar = () => {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, delay: 0.3 }}
         className="fixed bottom-0 left-0 right-0 z-50 player-bar"
+        onContextMenu={(e) => e.preventDefault()}
       >
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center gap-4">
