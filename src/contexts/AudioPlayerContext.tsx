@@ -67,18 +67,110 @@ const savePersistedState = (state: PersistedState) => {
   }
 };
 
-// Fetch audio as blob and return a blob URL to prevent direct URL exposure
-const fetchAudioAsBlob = async (url: string): Promise<string | null> => {
+const CHUNK_SIZE = 65536; // 64KB chunks
+
+// Stream audio via MediaSource Extensions - never fetches the full file as one request
+const streamAudioViaMSE = async (
+  audioElement: HTMLAudioElement,
+  url: string,
+  abortSignal: AbortSignal
+): Promise<string | null> => {
   try {
+    if (!('MediaSource' in window)) {
+      // Fallback for browsers without MSE
+      console.warn("MSE not supported, falling back to direct src");
+      return null;
+    }
+
+    const mediaSource = new MediaSource();
+    const objectUrl = URL.createObjectURL(mediaSource);
+    audioElement.src = objectUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      mediaSource.addEventListener('sourceopen', () => resolve(), { once: true });
+      mediaSource.addEventListener('error', () => reject(new Error('MediaSource error')), { once: true });
+      // Timeout to avoid hanging
+      setTimeout(() => reject(new Error('MediaSource open timeout')), 5000);
+    });
+
+    if (abortSignal.aborted) {
+      URL.revokeObjectURL(objectUrl);
+      return null;
+    }
+
+    const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+
     const response = await fetch(url, {
       headers: { 'Accept': 'audio/*' },
       credentials: 'omit',
+      signal: abortSignal,
     });
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
+
+    if (!response.ok || !response.body) {
+      URL.revokeObjectURL(objectUrl);
+      return null;
+    }
+
+    const reader = response.body.getReader();
+    let buffer = new Uint8Array(0);
+
+    const appendToSourceBuffer = (data: Uint8Array): Promise<void> => {
+      const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+      return new Promise((resolve, reject) => {
+        if (abortSignal.aborted || mediaSource.readyState !== 'open') {
+          reject(new Error('Aborted or closed'));
+          return;
+        }
+        try {
+          sourceBuffer.appendBuffer(arrayBuffer);
+          sourceBuffer.addEventListener('updateend', () => resolve(), { once: true });
+          sourceBuffer.addEventListener('error', () => reject(new Error('SourceBuffer error')), { once: true });
+        } catch (e) {
+          reject(e);
+        }
+      });
+    };
+
+    // Read and append chunks
+    while (true) {
+      if (abortSignal.aborted) break;
+
+      const { done, value } = await reader.read();
+
+      if (value) {
+        // Merge with leftover buffer
+        const merged = new Uint8Array(buffer.length + value.length);
+        merged.set(buffer);
+        merged.set(value, buffer.length);
+        buffer = merged;
+
+        // Append in CHUNK_SIZE pieces
+        while (buffer.length >= CHUNK_SIZE) {
+          const chunk = buffer.slice(0, CHUNK_SIZE);
+          buffer = buffer.slice(CHUNK_SIZE);
+
+          if (mediaSource.readyState !== 'open') break;
+          await appendToSourceBuffer(chunk);
+        }
+      }
+
+      if (done) {
+        // Append remaining buffer
+        if (buffer.length > 0 && mediaSource.readyState === 'open') {
+          await appendToSourceBuffer(buffer);
+          buffer = new Uint8Array(0);
+        }
+        if (mediaSource.readyState === 'open') {
+          mediaSource.endOfStream();
+        }
+        break;
+      }
+    }
+
+    return objectUrl;
   } catch (e) {
-    console.error("Failed to fetch audio blob:", e);
+    if ((e as Error).name === 'AbortError') return null;
+    console.error("MSE streaming failed:", e);
     return null;
   }
 };
@@ -107,6 +199,7 @@ export const useAudioPlayer = () => {
 export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentBlobUrlRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [priorityQueue, setPriorityQueue] = useState<Track[]>([]);
   const [albumContext, setAlbumContext] = useState<Track[]>([]);
@@ -144,28 +237,34 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return shuffled;
   };
 
-  // Revoke previous blob URL to free memory
+  // Revoke previous object URL and abort ongoing stream
   const revokePreviousBlobUrl = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     if (currentBlobUrlRef.current) {
       URL.revokeObjectURL(currentBlobUrlRef.current);
       currentBlobUrlRef.current = null;
     }
   }, []);
 
-  // Load and play a track using blob URL
+  // Load and play a track using MSE chunked streaming
   const loadAndPlayTrack = useCallback(async (track: Track) => {
     if (!audioRef.current || !track.mp3_url) return;
 
     revokePreviousBlobUrl();
     setCurrentTrack(track);
 
-    const blobUrl = await fetchAudioAsBlob(track.mp3_url);
-    if (blobUrl) {
-      currentBlobUrlRef.current = blobUrl;
-      audioRef.current.src = blobUrl;
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    const objectUrl = await streamAudioViaMSE(audioRef.current, track.mp3_url, abortController.signal);
+    if (objectUrl) {
+      currentBlobUrlRef.current = objectUrl;
       audioRef.current.play().catch(console.error);
-    } else {
-      // Fallback: use encoded src if blob fetch fails (e.g. CORS)
+    } else if (!abortController.signal.aborted) {
+      // Fallback if MSE not supported or failed
       audioRef.current.src = track.mp3_url;
       audioRef.current.play().catch(console.error);
     }
@@ -241,11 +340,12 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setOriginalAlbumContext(saved.albumContext);
         
         if (saved.currentTrack.mp3_url) {
-          // Load persisted track as blob (don't autoplay)
-          fetchAudioAsBlob(saved.currentTrack.mp3_url).then((blobUrl) => {
-            if (blobUrl && audioRef.current) {
-              currentBlobUrlRef.current = blobUrl;
-              audioRef.current.src = blobUrl;
+          // Load persisted track via MSE (don't autoplay)
+          const restoreController = new AbortController();
+          abortControllerRef.current = restoreController;
+          streamAudioViaMSE(audio, saved.currentTrack.mp3_url, restoreController.signal).then((objectUrl) => {
+            if (objectUrl && audioRef.current && !restoreController.signal.aborted) {
+              currentBlobUrlRef.current = objectUrl;
               audioRef.current.currentTime = saved.progress || 0;
               setProgress(saved.progress || 0);
             }
