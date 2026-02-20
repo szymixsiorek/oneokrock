@@ -14,8 +14,8 @@ export interface Track {
 
 interface AudioPlayerContextType {
   currentTrack: Track | null;
-  priorityQueue: Track[];
-  albumContext: Track[];
+  priorityQueue: Track[]; // FIFO queue for "Add to Queue" tracks
+  albumContext: Track[]; // Current album/playlist context
   isPlaying: boolean;
   progress: number;
   duration: number;
@@ -67,127 +67,6 @@ const savePersistedState = (state: PersistedState) => {
   }
 };
 
-const CHUNK_SIZE = 65536; // 64KB chunks
-
-// Stream audio via MediaSource Extensions - never fetches the full file as one request
-const streamAudioViaMSE = async (
-  audioElement: HTMLAudioElement,
-  url: string,
-  abortSignal: AbortSignal
-): Promise<string | null> => {
-  try {
-    if (!('MediaSource' in window)) {
-      // Fallback for browsers without MSE
-      console.warn("MSE not supported, falling back to direct src");
-      return null;
-    }
-
-    const mediaSource = new MediaSource();
-    const objectUrl = URL.createObjectURL(mediaSource);
-    audioElement.src = objectUrl;
-
-    await new Promise<void>((resolve, reject) => {
-      mediaSource.addEventListener('sourceopen', () => resolve(), { once: true });
-      mediaSource.addEventListener('error', () => reject(new Error('MediaSource error')), { once: true });
-      // Timeout to avoid hanging
-      setTimeout(() => reject(new Error('MediaSource open timeout')), 5000);
-    });
-
-    if (abortSignal.aborted) {
-      URL.revokeObjectURL(objectUrl);
-      return null;
-    }
-
-    const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-
-    const response = await fetch(url, {
-      headers: { 'Accept': 'audio/*' },
-      credentials: 'omit',
-      signal: abortSignal,
-    });
-
-    if (!response.ok || !response.body) {
-      URL.revokeObjectURL(objectUrl);
-      return null;
-    }
-
-    const reader = response.body.getReader();
-    let buffer = new Uint8Array(0);
-
-    const appendToSourceBuffer = (data: Uint8Array): Promise<void> => {
-      const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
-      return new Promise((resolve, reject) => {
-        if (abortSignal.aborted || mediaSource.readyState !== 'open') {
-          reject(new Error('Aborted or closed'));
-          return;
-        }
-        try {
-          sourceBuffer.appendBuffer(arrayBuffer);
-          sourceBuffer.addEventListener('updateend', () => resolve(), { once: true });
-          sourceBuffer.addEventListener('error', () => reject(new Error('SourceBuffer error')), { once: true });
-        } catch (e) {
-          reject(e);
-        }
-      });
-    };
-
-    // Read and append chunks
-    while (true) {
-      if (abortSignal.aborted) break;
-
-      const { done, value } = await reader.read();
-
-      if (value) {
-        // Merge with leftover buffer
-        const merged = new Uint8Array(buffer.length + value.length);
-        merged.set(buffer);
-        merged.set(value, buffer.length);
-        buffer = merged;
-
-        // Append in CHUNK_SIZE pieces
-        while (buffer.length >= CHUNK_SIZE) {
-          const chunk = buffer.slice(0, CHUNK_SIZE);
-          buffer = buffer.slice(CHUNK_SIZE);
-
-          if (mediaSource.readyState !== 'open') break;
-          await appendToSourceBuffer(chunk);
-        }
-      }
-
-      if (done) {
-        // Append remaining buffer
-        if (buffer.length > 0 && mediaSource.readyState === 'open') {
-          await appendToSourceBuffer(buffer);
-          buffer = new Uint8Array(0);
-        }
-        if (mediaSource.readyState === 'open') {
-          mediaSource.endOfStream();
-        }
-        break;
-      }
-    }
-
-    return objectUrl;
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') return null;
-    console.error("MSE streaming failed:", e);
-    return null;
-  }
-};
-
-// Simple obfuscation for stored URLs - split/join to avoid plain string in memory
-const obfuscateUrl = (url: string): string => {
-  return btoa(url);
-};
-
-const deobfuscateUrl = (encoded: string): string => {
-  try {
-    return atob(encoded);
-  } catch {
-    return encoded;
-  }
-};
-
 export const useAudioPlayer = () => {
   const context = useContext(AudioPlayerContext);
   if (!context) {
@@ -198,11 +77,9 @@ export const useAudioPlayer = () => {
 
 export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const currentBlobUrlRef = useRef<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [priorityQueue, setPriorityQueue] = useState<Track[]>([]);
-  const [albumContext, setAlbumContext] = useState<Track[]>([]);
+  const [priorityQueue, setPriorityQueue] = useState<Track[]>([]); // User's "Add to Queue" list
+  const [albumContext, setAlbumContext] = useState<Track[]>([]); // Current album tracks
   const [originalAlbumContext, setOriginalAlbumContext] = useState<Track[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -212,6 +89,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [isRepeating, setIsRepeating] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Use ref to always have latest state in event handlers
   const stateRef = useRef({
     currentTrack,
     priorityQueue,
@@ -237,40 +115,15 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return shuffled;
   };
 
-  // Revoke previous object URL and abort ongoing stream
-  const revokePreviousBlobUrl = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    if (currentBlobUrlRef.current) {
-      URL.revokeObjectURL(currentBlobUrlRef.current);
-      currentBlobUrlRef.current = null;
-    }
+  // Play a specific track (used internally)
+  const playTrack = useCallback((track: Track) => {
+    if (!audioRef.current || !track.mp3_url) return;
+    setCurrentTrack(track);
+    audioRef.current.src = track.mp3_url;
+    audioRef.current.play().catch(console.error);
   }, []);
 
-  // Load and play a track using MSE chunked streaming
-  const loadAndPlayTrack = useCallback(async (track: Track) => {
-    if (!audioRef.current || !track.mp3_url) return;
-
-    revokePreviousBlobUrl();
-    setCurrentTrack(track);
-
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    const objectUrl = await streamAudioViaMSE(audioRef.current, track.mp3_url, abortController.signal);
-    if (objectUrl) {
-      currentBlobUrlRef.current = objectUrl;
-      audioRef.current.play().catch(console.error);
-    } else if (!abortController.signal.aborted) {
-      // Fallback if MSE not supported or failed
-      audioRef.current.src = track.mp3_url;
-      audioRef.current.play().catch(console.error);
-    }
-  }, [revokePreviousBlobUrl]);
-
-  // Handle track ended
+  // Handle track ended - check priority queue first, then album context
   const handleTrackEnded = useCallback(() => {
     const { currentTrack: track, priorityQueue: queue, albumContext: album, isRepeating: repeat } = stateRef.current;
     
@@ -282,15 +135,17 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return;
     }
 
+    // Check priority queue first
     if (queue.length > 0) {
       const nextTrack = queue[0];
-      setPriorityQueue(prev => prev.slice(1));
+      setPriorityQueue(prev => prev.slice(1)); // Remove first item
       if (nextTrack?.mp3_url) {
-        loadAndPlayTrack(nextTrack);
+        playTrack(nextTrack);
       }
       return;
     }
 
+    // Fall back to album context
     if (track && album.length > 0) {
       const currentIndex = album.findIndex(t => t.id === track.id);
       const nextIndex = currentIndex + 1;
@@ -298,11 +153,12 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (nextIndex < album.length) {
         const nextTrack = album[nextIndex];
         if (nextTrack?.mp3_url) {
-          loadAndPlayTrack(nextTrack);
+          playTrack(nextTrack);
         }
       }
+      // If we're at the end of the album, just stop (don't loop)
     }
-  }, [loadAndPlayTrack]);
+  }, [playTrack]);
 
   // Initialize audio element and restore state
   useEffect(() => {
@@ -340,16 +196,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setOriginalAlbumContext(saved.albumContext);
         
         if (saved.currentTrack.mp3_url) {
-          // Load persisted track via MSE (don't autoplay)
-          const restoreController = new AbortController();
-          abortControllerRef.current = restoreController;
-          streamAudioViaMSE(audio, saved.currentTrack.mp3_url, restoreController.signal).then((objectUrl) => {
-            if (objectUrl && audioRef.current && !restoreController.signal.aborted) {
-              currentBlobUrlRef.current = objectUrl;
-              audioRef.current.currentTime = saved.progress || 0;
-              setProgress(saved.progress || 0);
-            }
-          });
+          audio.src = saved.currentTrack.mp3_url;
+          audio.currentTime = saved.progress || 0;
+          setProgress(saved.progress || 0);
         }
       }
     }
@@ -362,10 +211,6 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.pause();
-      // Revoke blob URL on unmount
-      if (currentBlobUrlRef.current) {
-        URL.revokeObjectURL(currentBlobUrlRef.current);
-      }
     };
   }, []);
 
@@ -395,7 +240,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
           volume,
         });
       }
-    }, 2000);
+    }, 2000); // Save every 2 seconds
 
     return () => clearInterval(interval);
   }, [currentTrack, originalAlbumContext, volume, isInitialized]);
@@ -420,8 +265,10 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setAlbumContext(isShuffled ? shuffleArray(newAlbumContext) : newAlbumContext);
     }
 
-    loadAndPlayTrack(track);
-  }, [isShuffled, loadAndPlayTrack]);
+    setCurrentTrack(track);
+    audioRef.current.src = track.mp3_url;
+    audioRef.current.play().catch(console.error);
+  }, [isShuffled]);
 
   const pause = useCallback(() => {
     audioRef.current?.pause();
@@ -440,15 +287,17 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const next = useCallback(() => {
     const { currentTrack: track, priorityQueue: queue, albumContext: album } = stateRef.current;
 
+    // Check priority queue first
     if (queue.length > 0) {
       const nextTrack = queue[0];
       setPriorityQueue(prev => prev.slice(1));
       if (nextTrack?.mp3_url) {
-        loadAndPlayTrack(nextTrack);
+        playTrack(nextTrack);
       }
       return;
     }
 
+    // Fall back to album context
     if (!track || album.length === 0) return;
 
     const currentIndex = album.findIndex(t => t.id === track.id);
@@ -456,9 +305,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const nextTrack = album[nextIndex];
 
     if (nextTrack?.mp3_url) {
-      loadAndPlayTrack(nextTrack);
+      playTrack(nextTrack);
     }
-  }, [loadAndPlayTrack]);
+  }, [playTrack]);
 
   const previous = useCallback(() => {
     if (!audioRef.current) return;
@@ -466,6 +315,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const { currentTrack: track, albumContext: album } = stateRef.current;
     if (!track || album.length === 0) return;
 
+    // If more than 3 seconds in, restart current track
     if (audioRef.current.currentTime > 3) {
       audioRef.current.currentTime = 0;
       return;
@@ -476,9 +326,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const prevTrack = album[prevIndex];
 
     if (prevTrack?.mp3_url) {
-      loadAndPlayTrack(prevTrack);
+      playTrack(prevTrack);
     }
-  }, [loadAndPlayTrack]);
+  }, [playTrack]);
 
   const seek = useCallback((time: number) => {
     if (audioRef.current) {
@@ -512,6 +362,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const addToQueue = useCallback((track: Track) => {
     setPriorityQueue(prev => {
+      // Don't add duplicates
       if (prev.some(t => t.id === track.id)) {
         toast({
           title: "Already in queue",

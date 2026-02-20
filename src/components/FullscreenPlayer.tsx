@@ -171,7 +171,6 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
           transition={{ type: "spring", damping: 30, stiffness: 300 }}
           className="fixed inset-0 z-[9999] bg-background"
           style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
-          onContextMenu={(e) => e.preventDefault()}
         >
           {/* Background gradient */}
           <div 
