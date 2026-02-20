@@ -18,7 +18,7 @@ import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import FullscreenPlayer from "./FullscreenPlayer";
 
 const formatTime = (seconds: number): string => {
-  if (!seconds || isNaN(seconds)) return "0:00";
+  if (!seconds || isNaN(seconds) || !isFinite(seconds)) return "0:00";
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
@@ -245,7 +245,7 @@ const PlayerBar = () => {
                 <Slider
                   value={[progress]}
                   onValueChange={handleProgressChange}
-                  max={duration || 100}
+                  max={(duration && isFinite(duration)) ? duration : 100}
                   step={0.1}
                   className="flex-1"
                 />
