@@ -64,6 +64,7 @@ const Index = () => {
                 <AlbumCard
                   key={album.id}
                   id={album.id}
+                  slug={album.slug}
                   title={album.title}
                   coverUrl={album.cover_url || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
                   releaseDate={album.release_date || new Date().toISOString()}

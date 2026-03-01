@@ -4,6 +4,7 @@ import { Play, Calendar } from "lucide-react";
 
 interface AlbumCardProps {
   id: string;
+  slug: string;
   title: string;
   coverUrl: string;
   releaseDate: string;
@@ -14,6 +15,7 @@ interface AlbumCardProps {
 
 const AlbumCard = ({
   id,
+  slug,
   title,
   coverUrl,
   releaseDate,
@@ -33,7 +35,7 @@ const AlbumCard = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
     >
-      <Link to={`/album/${id}`}>
+      <Link to={`/album/${slug}`}>
         <div className="album-card group p-4">
           {/* Cover Art */}
           <div className="relative aspect-square rounded-lg overflow-hidden mb-4">

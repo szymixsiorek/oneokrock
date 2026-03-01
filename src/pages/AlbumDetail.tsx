@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useAlbum } from "@/hooks/useAlbums";
+import { useAlbumBySlug } from "@/hooks/useAlbums";
 import { useAudioPlayer, Track } from "@/contexts/AudioPlayerContext";
 import { getTrackDuration } from "@/data/trackDurations";
 import { 
@@ -19,8 +19,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const AlbumDetail = () => {
-  const { id } = useParams<{ id: string }>();
-  const { data: album, isLoading, error } = useAlbum(id || "");
+  const { slug } = useParams<{ slug: string }>();
+  const { data: album, isLoading, error } = useAlbumBySlug(slug || "");
   const { play, currentTrack, isPlaying, togglePlayPause, toggleShuffle, addToQueue } = useAudioPlayer();
 
   if (isLoading) {

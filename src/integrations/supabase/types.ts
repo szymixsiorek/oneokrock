@@ -24,6 +24,7 @@ export type Database = {
           id: string
           release_date: string | null
           release_type: string
+          slug: string
           title: string
           updated_at: string
         }
@@ -36,6 +37,7 @@ export type Database = {
           id?: string
           release_date?: string | null
           release_type?: string
+          slug: string
           title: string
           updated_at?: string
         }
@@ -48,6 +50,7 @@ export type Database = {
           id?: string
           release_date?: string | null
           release_type?: string
+          slug?: string
           title?: string
           updated_at?: string
         }
