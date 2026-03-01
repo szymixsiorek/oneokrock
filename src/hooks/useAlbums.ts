@@ -27,9 +27,9 @@ export const useAlbums = () => {
   });
 };
 
-export const useAlbum = (id: string) => {
+export const useAlbumBySlug = (slug: string) => {
   return useQuery({
-    queryKey: ["album", id],
+    queryKey: ["album", slug],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("albums")
@@ -37,7 +37,7 @@ export const useAlbum = (id: string) => {
           *,
           tracks (*)
         `)
-        .eq("id", id)
+        .eq("slug", slug)
         .single();
 
       if (error) throw error;
@@ -49,7 +49,7 @@ export const useAlbum = (id: string) => {
       
       return data as Album;
     },
-    enabled: !!id,
+    enabled: !!slug,
   });
 };
 
