@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "@/hooks/use-toast";
+import { getProxiedAudioUrl } from "@/lib/audioProxy";
 
 export interface Track {
   id: string;
@@ -116,11 +117,17 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   // Play a specific track (used internally)
-  const playTrack = useCallback((track: Track) => {
+  const playTrack = useCallback(async (track: Track) => {
     if (!audioRef.current || !track.mp3_url) return;
     setCurrentTrack(track);
-    audioRef.current.src = track.mp3_url;
-    audioRef.current.play().catch(console.error);
+    try {
+      const proxiedUrl = await getProxiedAudioUrl(track.mp3_url);
+      audioRef.current.src = proxiedUrl;
+      audioRef.current.play().catch(console.error);
+    } catch (err) {
+      console.error("Failed to get proxied audio URL:", err);
+      toast({ title: "Playback error", description: "Could not load track." });
+    }
   }, []);
 
   // Handle track ended - check priority queue first, then album context
@@ -196,9 +203,11 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setOriginalAlbumContext(saved.albumContext);
         
         if (saved.currentTrack.mp3_url) {
-          audio.src = saved.currentTrack.mp3_url;
-          audio.currentTime = saved.progress || 0;
-          setProgress(saved.progress || 0);
+          getProxiedAudioUrl(saved.currentTrack.mp3_url).then((url) => {
+            audio.src = url;
+            audio.currentTime = saved.progress || 0;
+            setProgress(saved.progress || 0);
+          }).catch(console.error);
         }
       }
     }
@@ -257,7 +266,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   }, [currentTrack, isPlaying, volume, originalAlbumContext, isInitialized]);
 
-  const play = useCallback((track: Track, newAlbumContext?: Track[]) => {
+  const play = useCallback(async (track: Track, newAlbumContext?: Track[]) => {
     if (!audioRef.current || !track.mp3_url) return;
 
     if (newAlbumContext) {
@@ -266,8 +275,14 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
 
     setCurrentTrack(track);
-    audioRef.current.src = track.mp3_url;
-    audioRef.current.play().catch(console.error);
+    try {
+      const proxiedUrl = await getProxiedAudioUrl(track.mp3_url);
+      audioRef.current.src = proxiedUrl;
+      audioRef.current.play().catch(console.error);
+    } catch (err) {
+      console.error("Failed to get proxied audio URL:", err);
+      toast({ title: "Playback error", description: "Could not load track." });
+    }
   }, [isShuffled]);
 
   const pause = useCallback(() => {
