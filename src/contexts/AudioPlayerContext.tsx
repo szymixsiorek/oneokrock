@@ -121,12 +121,16 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!audioRef.current || !track.mp3_url) return;
     setCurrentTrack(track);
     try {
-      const proxiedUrl = await getProxiedAudioUrl(track.mp3_url);
-      audioRef.current.src = proxiedUrl;
+      const url = await getProxiedAudioUrl(track.mp3_url);
+      audioRef.current.src = url;
       audioRef.current.play().catch(console.error);
     } catch (err) {
-      console.error("Failed to get proxied audio URL:", err);
-      toast({ title: "Playback error", description: "Could not load track." });
+      console.error("[AudioPlayer] Proxy failed, trying direct URL:", err);
+      audioRef.current.src = track.mp3_url;
+      audioRef.current.play().catch((e) => {
+        console.error("[AudioPlayer] Direct playback also failed:", e);
+        toast({ title: "Playback error", description: "Could not load track." });
+      });
     }
   }, []);
 
@@ -276,12 +280,16 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     setCurrentTrack(track);
     try {
-      const proxiedUrl = await getProxiedAudioUrl(track.mp3_url);
-      audioRef.current.src = proxiedUrl;
+      const url = await getProxiedAudioUrl(track.mp3_url);
+      audioRef.current.src = url;
       audioRef.current.play().catch(console.error);
     } catch (err) {
-      console.error("Failed to get proxied audio URL:", err);
-      toast({ title: "Playback error", description: "Could not load track." });
+      console.error("[AudioPlayer] Proxy failed, trying direct URL:", err);
+      audioRef.current.src = track.mp3_url;
+      audioRef.current.play().catch((e) => {
+        console.error("[AudioPlayer] Direct playback also failed:", e);
+        toast({ title: "Playback error", description: "Could not load track." });
+      });
     }
   }, [isShuffled]);
 
