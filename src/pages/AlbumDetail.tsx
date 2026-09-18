@@ -1,3 +1,4 @@
+import { useEffect, useState, type CSSProperties } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAlbumBySlug } from "@/hooks/useAlbums";
@@ -18,10 +19,144 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
+type AlbumColor = {
+  h: number;
+  s: number;
+  l: number;
+};
+
+const DEFAULT_ALBUM_COLOR: AlbumColor = { h: 348, s: 100, l: 50 };
+
+const rgbToHsl = (red: number, green: number, blue: number): AlbumColor => {
+  const r = red / 255;
+  const g = green / 255;
+  const b = blue / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  let h = 0;
+
+  if (delta !== 0) {
+    if (max === r) h = 60 * (((g - b) / delta) % 6);
+    if (max === g) h = 60 * ((b - r) / delta + 2);
+    if (max === b) h = 60 * ((r - g) / delta + 4);
+  }
+
+  if (h < 0) h += 360;
+  const l = (max + min) / 2;
+  const s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+
+  return {
+    h: Math.round(h),
+    s: Math.round(s * 100),
+    l: Math.round(l * 100),
+  };
+};
+
+const colorFromHex = (value: string | null): AlbumColor => {
+  if (!value) return DEFAULT_ALBUM_COLOR;
+  const hex = value.trim().replace("#", "");
+  const normalized = hex.length === 3
+    ? hex.split("").map((character) => character + character).join("")
+    : hex;
+
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return DEFAULT_ALBUM_COLOR;
+
+  return rgbToHsl(
+    Number.parseInt(normalized.slice(0, 2), 16),
+    Number.parseInt(normalized.slice(2, 4), 16),
+    Number.parseInt(normalized.slice(4, 6), 16),
+  );
+};
+
+const extractCoverColor = (coverUrl: string): Promise<AlbumColor> => (
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 64;
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      if (!context) {
+        reject(new Error("Canvas unavailable"));
+        return;
+      }
+
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      const buckets = new Map<string, { r: number; g: number; b: number; count: number }>();
+
+      for (let index = 0; index < pixels.length; index += 16) {
+        const alpha = pixels[index + 3];
+        if (alpha < 200) continue;
+
+        const r = pixels[index];
+        const g = pixels[index + 1];
+        const b = pixels[index + 2];
+        const brightest = Math.max(r, g, b);
+        const darkest = Math.min(r, g, b);
+        if (brightest < 28 || darkest > 238) continue;
+
+        const key = `${Math.round(r / 24)}-${Math.round(g / 24)}-${Math.round(b / 24)}`;
+        const bucket = buckets.get(key) || { r: 0, g: 0, b: 0, count: 0 };
+        bucket.r += r;
+        bucket.g += g;
+        bucket.b += b;
+        bucket.count += 1;
+        buckets.set(key, bucket);
+      }
+
+      const ranked = [...buckets.values()].map((bucket) => {
+        const r = bucket.r / bucket.count;
+        const g = bucket.g / bucket.count;
+        const b = bucket.b / bucket.count;
+        const hsl = rgbToHsl(r, g, b);
+        const brightnessFit = 1 - Math.min(Math.abs(hsl.l - 55) / 55, 0.75);
+        const score = bucket.count * (0.35 + hsl.s / 100) * brightnessFit;
+        return { hsl, score };
+      }).sort((a, b) => b.score - a.score);
+
+      const selected = ranked[0]?.hsl;
+      if (!selected) {
+        reject(new Error("No representative color found"));
+        return;
+      }
+
+      resolve({
+        h: selected.h,
+        s: Math.max(55, Math.min(selected.s, 92)),
+        l: Math.max(46, Math.min(selected.l, 62)),
+      });
+    };
+    image.onerror = () => reject(new Error("Cover could not be sampled"));
+    image.src = coverUrl;
+  })
+);
+
 const AlbumDetail = () => {
   const { slug } = useParams<{ slug: string }>();
   const { data: album, isLoading, error } = useAlbumBySlug(slug || "");
   const { play, currentTrack, isPlaying, togglePlayPause, toggleShuffle, addToQueue } = useAudioPlayer();
+  const [albumColor, setAlbumColor] = useState<AlbumColor>(DEFAULT_ALBUM_COLOR);
+
+  useEffect(() => {
+    let isActive = true;
+    const fallbackColor = colorFromHex(album?.accent_color || null);
+    setAlbumColor(fallbackColor);
+
+    if (!album?.cover_url) return () => { isActive = false; };
+
+    extractCoverColor(album.cover_url)
+      .then((color) => {
+        if (isActive) setAlbumColor(color);
+      })
+      .catch(() => {
+        if (isActive) setAlbumColor(fallbackColor);
+      });
+
+    return () => { isActive = false; };
+  }, [album?.cover_url, album?.accent_color]);
 
   if (isLoading) {
     return (
@@ -66,7 +201,13 @@ const AlbumDetail = () => {
     Mixed: "bg-muted text-muted-foreground",
   };
 
-  const accentColor = album.accent_color || "#ff0033";
+  const albumThemeStyle = {
+    "--primary": `${albumColor.h} ${albumColor.s}% ${albumColor.l}%`,
+    "--primary-foreground": albumColor.l > 58 ? "0 0% 5%" : "0 0% 100%",
+    "--ring": `${albumColor.h} ${albumColor.s}% ${albumColor.l}%`,
+    "--neon-red": `${albumColor.h} ${albumColor.s}% ${albumColor.l}%`,
+    "--album-accent": `${albumColor.h} ${albumColor.s}% ${albumColor.l}%`,
+  } as CSSProperties;
 
   // Build queue from album tracks
   const buildQueue = (): Track[] => {
@@ -133,16 +274,11 @@ const AlbumDetail = () => {
   };
 
   return (
-    <div className="min-h-screen pt-24 pb-32">
+    <div className="album-theme min-h-screen pt-24 pb-32" style={albumThemeStyle}>
       {/* Hero Section */}
       <div className="relative">
         {/* Background Blur */}
-        <div 
-          className="absolute inset-0 h-[500px] opacity-30 blur-3xl"
-          style={{
-            background: `linear-gradient(180deg, ${accentColor}40 0%, transparent 100%)`,
-          }}
-        />
+        <div className="album-theme-glow absolute inset-0 h-[500px]" />
 
         <div className="container mx-auto max-w-6xl px-4 relative z-10">
           {/* Back Button */}
@@ -169,7 +305,7 @@ const AlbumDetail = () => {
               transition={{ duration: 0.5 }}
               className="w-full md:w-72 flex-shrink-0"
             >
-              <div className="aspect-square rounded-2xl overflow-hidden glass-panel p-2">
+              <div className="album-cover-frame aspect-square rounded-2xl overflow-hidden glass-panel p-2">
                 <img
                   src={album.cover_url || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
                   alt={album.title}
@@ -187,13 +323,7 @@ const AlbumDetail = () => {
             >
               {/* Edition Badge */}
               <div className="flex items-center gap-3">
-                <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                  album.edition_type === "Japanese" 
-                    ? "bg-primary/20 text-primary" 
-                    : album.edition_type === "International"
-                    ? "bg-accent/20 text-accent"
-                    : "bg-cyan-400/20 text-cyan-400"
-                }`}>
+                <span className="album-edition-badge px-3 py-1 text-sm font-semibold rounded-full">
                   {album.edition_type} Edition
                 </span>
               </div>
@@ -232,15 +362,15 @@ const AlbumDetail = () => {
 
               {/* Actions */}
               <div className="flex items-center gap-3 pt-2">
-                <Button size="lg" className="gap-2 neon-glow-red" onClick={handlePlayAll}>
+                <Button size="lg" className="album-primary-button gap-2" onClick={handlePlayAll}>
                   <Play className="w-5 h-5" fill="currentColor" />
                   Play
                 </Button>
-                <Button size="lg" variant="outline" className="gap-2 glass-panel border-border/50" onClick={handleShufflePlay}>
+                <Button size="lg" variant="outline" className="album-secondary-button gap-2 glass-panel" onClick={handleShufflePlay}>
                   <Shuffle className="w-5 h-5" />
                   Shuffle
                 </Button>
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary">
+                <Button size="icon" variant="ghost" className="album-heart-button text-muted-foreground">
                   <Heart className="w-5 h-5" />
                 </Button>
               </div>
@@ -255,7 +385,7 @@ const AlbumDetail = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="glass-panel rounded-2xl p-6"
+          className="album-tracklist glass-panel rounded-2xl p-6"
         >
           {/* Tracklist Header */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground px-4 pb-4 border-b border-border/50">
@@ -280,7 +410,7 @@ const AlbumDetail = () => {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3, delay: 0.3 + index * 0.03 }}
                     onClick={() => hasAudio && handlePlayTrack(track.id)}
-                    className={`track-row flex items-center gap-2 group ${hasAudio ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}
+                    className={`track-row flex items-center gap-2 group ${isCurrentTrack ? "playing" : ""} ${hasAudio ? "cursor-pointer" : "cursor-not-allowed opacity-50"}`}
                   >
                     {/* Track Number / Play */}
                     <div className="w-10 text-center">
