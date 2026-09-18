@@ -5,6 +5,7 @@ import type { ISourceOptions } from "@tsparticles/engine";
 
 const ParticleBackground = () => {
   const [init, setInit] = useState(false);
+  const [albumHue, setAlbumHue] = useState<number | null>(null);
 
   useEffect(() => {
     initParticlesEngine(async (engine) => {
@@ -13,6 +14,35 @@ const ParticleBackground = () => {
       setInit(true);
     });
   }, []);
+
+  useEffect(() => {
+    const handleAlbumTheme = (event: Event) => {
+      const customEvent = event as CustomEvent<{ hue?: number }>;
+      const hue = customEvent.detail?.hue;
+      setAlbumHue(Number.isFinite(hue) ? hue ?? null : null);
+    };
+
+    const handleAlbumThemeReset = () => setAlbumHue(null);
+    window.addEventListener("album-theme-change", handleAlbumTheme);
+    window.addEventListener("album-theme-reset", handleAlbumThemeReset);
+
+    return () => {
+      window.removeEventListener("album-theme-change", handleAlbumTheme);
+      window.removeEventListener("album-theme-reset", handleAlbumThemeReset);
+    };
+  }, []);
+
+  const particleColors = albumHue === null
+    ? ["#ff0033", "#fbbf24", "#06b6d4"]
+    : [
+        `hsl(${albumHue}, 88%, 58%)`,
+        `hsl(${(albumHue + 24) % 360}, 82%, 62%)`,
+        `hsl(${(albumHue + 336) % 360}, 72%, 54%)`,
+      ];
+
+  const linkColor = albumHue === null
+    ? "#ff0033"
+    : `hsl(${albumHue}, 88%, 58%)`;
 
   const options: ISourceOptions = useMemo(
     () => ({
@@ -24,10 +54,10 @@ const ParticleBackground = () => {
       fpsLimit: 60,
       particles: {
         color: {
-          value: ["#ff0033", "#fbbf24", "#06b6d4"],
+          value: particleColors,
         },
         links: {
-          color: "#ff0033",
+          color: linkColor,
           distance: 150,
           enable: true,
           opacity: 0.1,
@@ -72,13 +102,14 @@ const ParticleBackground = () => {
       },
       detectRetina: true,
     }),
-    []
+    [linkColor, particleColors]
   );
 
   if (!init) return null;
 
   return (
     <Particles
+      key={albumHue ?? "default"}
       id="tsparticles"
       options={options}
       className="fixed inset-0 -z-10"

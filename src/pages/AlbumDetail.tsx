@@ -158,6 +158,16 @@ const AlbumDetail = () => {
     return () => { isActive = false; };
   }, [album?.cover_url, album?.accent_color]);
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("album-theme-change", {
+      detail: { hue: albumColor.h },
+    }));
+  }, [albumColor.h]);
+
+  useEffect(() => () => {
+    window.dispatchEvent(new Event("album-theme-reset"));
+  }, []);
+
   if (isLoading) {
     return (
       <div className="min-h-screen pt-28 pb-32 px-4 flex items-center justify-center">
