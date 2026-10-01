@@ -402,7 +402,10 @@ const AlbumDetail = () => {
             <span className="w-10 text-center">#</span>
             <span className="flex-1">Title</span>
             <span className="w-20 hidden sm:block">Language</span>
-            <Clock className="w-4 h-4" />
+            <span className="w-12 flex justify-end">
+              <Clock className="w-4 h-4" />
+            </span>
+            <span className="w-5" aria-hidden="true" />
           </div>
 
           {/* Tracks */}
