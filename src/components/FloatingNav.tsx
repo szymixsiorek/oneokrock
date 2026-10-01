@@ -12,13 +12,13 @@ const FloatingNav = () => {
   ];
 
   return (
-    <motion.nav
-      initial={{ y: -100, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-      className="fixed top-6 left-1/2 -translate-x-1/2 z-50"
-    >
-      <div className="floating-nav px-2 py-2 flex items-center gap-1">
+    <nav className="fixed top-6 inset-x-0 z-50 flex justify-center width-before-scroll-bar pointer-events-none">
+      <motion.div
+        initial={{ y: -100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="floating-nav px-2 py-2 flex items-center gap-1 pointer-events-auto"
+      >
         {/* Logo */}
         <Link
           to="/"
@@ -70,8 +70,8 @@ const FloatingNav = () => {
             </Link>
           );
         })}
-      </div>
-    </motion.nav>
+      </motion.div>
+    </nav>
   );
 };
 
