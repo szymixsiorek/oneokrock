@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Shield, LogOut, Disc3, Trash2, ExternalLink } from "lucide-react";
@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAlbums, useDeleteAlbum } from "@/hooks/useAlbums";
 import AlbumUploader from "@/components/AlbumUploader";
 import { useToast } from "@/hooks/use-toast";
+import { callAdminApi, isIpDenied } from "@/lib/adminApi";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -14,12 +15,25 @@ const Admin = () => {
   const { data: albums, isLoading: albumsLoading } = useAlbums();
   const deleteAlbum = useDeleteAlbum();
   const { toast } = useToast();
+  const [accessState, setAccessState] = useState<"checking" | "allowed" | "denied">("checking");
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    if (loading) return;
+    if (!isAuthenticated) {
       navigate("/auth");
+      return;
     }
-  }, [loading, isAuthenticated, navigate]);
+
+    let active = true;
+    callAdminApi<{ allowed: boolean }>("access")
+      .then(() => active && setAccessState("allowed"))
+      .catch(async (error) => {
+        if (!active) return;
+        setAccessState("denied");
+        if (isIpDenied(error)) await signOut();
+      });
+    return () => { active = false; };
+  }, [loading, isAuthenticated, navigate, signOut]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -44,7 +58,7 @@ const Admin = () => {
     }
   };
 
-  if (loading) {
+  if (loading || accessState === "checking") {
     return (
       <div className="min-h-screen pt-28 pb-32 px-4 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -52,7 +66,19 @@ const Admin = () => {
     );
   }
 
-  if (!isAuthenticated) {
+  if (accessState === "denied") {
+    return (
+      <div className="min-h-screen pt-28 pb-32 px-4 flex items-center justify-center">
+        <div className="glass-panel rounded-2xl p-8 max-w-md text-center">
+          <Shield className="w-10 h-10 text-destructive mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
+          <p className="text-muted-foreground mt-2">Administrator access is not available from this IP address.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || accessState !== "allowed") {
     return null;
   }
 
