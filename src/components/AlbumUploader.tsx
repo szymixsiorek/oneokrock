@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { callAdminApi } from "@/lib/adminApi";
 import { 
   Upload, 
   Music, 
@@ -161,21 +162,21 @@ const AlbumUploader = () => {
     setUploadProgress(0);
 
     try {
+      const uploadFile = async (bucket: "covers" | "music", path: string, file: File) => {
+        const signed = await callAdminApi<{ path: string; token: string }>("createUpload", { bucket, path });
+        const { error } = await supabase.storage
+          .from(bucket)
+          .uploadToSignedUrl(signed.path, signed.token, file);
+        if (error) throw error;
+
+        return supabase.storage.from(bucket).getPublicUrl(signed.path).data.publicUrl;
+      };
+
       // Upload cover image first
       let coverUrl: string | null = null;
       if (coverFile) {
         const coverPath = `${Date.now()}-${coverFile.name}`;
-        const { error: coverError } = await supabase.storage
-          .from("covers")
-          .upload(coverPath, coverFile);
-
-        if (coverError) throw coverError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from("covers")
-          .getPublicUrl(coverPath);
-        
-        coverUrl = publicUrl;
+        coverUrl = await uploadFile("covers", coverPath, coverFile);
       }
 
       // Create album record
@@ -210,15 +211,7 @@ const AlbumUploader = () => {
             try {
               // Upload MP3 file
               const filePath = `${albumData.id}/${track.trackNumber.toString().padStart(2, "0")}-${track.file.name}`;
-              const { error: uploadError } = await supabase.storage
-                .from("music")
-                .upload(filePath, track.file);
-
-              if (uploadError) throw uploadError;
-
-              const { data: { publicUrl } } = supabase.storage
-                .from("music")
-                .getPublicUrl(filePath);
+              const publicUrl = await uploadFile("music", filePath, track.file);
 
               trackRecords.push({
                 album_id: albumData.id,

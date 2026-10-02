@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import { callAdminApi } from "@/lib/adminApi";
 
 export type Album = Tables<"albums"> & {
   tracks?: Tables<"tracks">[];
@@ -58,14 +59,7 @@ export const useCreateAlbum = () => {
 
   return useMutation({
     mutationFn: async (album: AlbumInsert) => {
-      const { data, error } = await supabase
-        .from("albums")
-        .insert(album)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      return callAdminApi<Tables<"albums">>("createAlbum", { album });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["albums"] });
@@ -78,13 +72,7 @@ export const useCreateTracks = () => {
 
   return useMutation({
     mutationFn: async (tracks: TrackInsert[]) => {
-      const { data, error } = await supabase
-        .from("tracks")
-        .insert(tracks)
-        .select();
-
-      if (error) throw error;
-      return data;
+      return callAdminApi<Tables<"tracks">[]>("createTracks", { tracks });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["albums"] });
@@ -97,12 +85,7 @@ export const useDeleteAlbum = () => {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("albums")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
+      await callAdminApi<{ deleted: boolean }>("deleteAlbum", { albumId: id });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["albums"] });

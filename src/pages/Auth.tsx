@@ -8,12 +8,12 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Disc3, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { z } from "zod";
+import { callAdminApi, isIpDenied } from "@/lib/adminApi";
 
 const emailSchema = z.string().email("Please enter a valid email address");
 const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,22 +22,16 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if already logged in
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (session) {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        try {
+          await callAdminApi<{ allowed: boolean }>("access");
           navigate("/admin");
+        } catch (error) {
+          if (isIpDenied(error)) await supabase.auth.signOut();
         }
       }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/admin");
-      }
     });
-
-    return () => subscription.unsubscribe();
   }, [navigate]);
 
   const validateForm = () => {
@@ -65,76 +59,20 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) {
-          if (error.message.includes("Invalid login credentials")) {
-            toast({
-              title: "Login Failed",
-              description: "Invalid email or password. Please try again.",
-              variant: "destructive",
-            });
-          } else if (error.message.includes("Email not confirmed")) {
-            toast({
-              title: "Email Not Verified",
-              description: "Please check your email and verify your account before logging in.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: error.message,
-              variant: "destructive",
-            });
-          }
-          return;
-        }
-
-        toast({
-          title: "Welcome back!",
-          description: "You have successfully logged in.",
-        });
-      } else {
-        const redirectUrl = `${window.location.origin}/`;
-        
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: redirectUrl,
-          },
-        });
-
-        if (error) {
-          if (error.message.includes("already registered")) {
-            toast({
-              title: "Account Exists",
-              description: "This email is already registered. Please log in instead.",
-              variant: "destructive",
-            });
-          } else {
-            toast({
-              title: "Error",
-              description: error.message,
-              variant: "destructive",
-            });
-          }
-          return;
-        }
-
-        toast({
-          title: "Account Created!",
-          description: "Please check your email to verify your account.",
-        });
-      }
+      const { session } = await callAdminApi<{ session: Parameters<typeof supabase.auth.setSession>[0] }>("login", {
+        email,
+        password,
+      });
+      const { error } = await supabase.auth.setSession(session);
+      if (error) throw error;
+      toast({ title: "Welcome back!", description: "You have successfully logged in." });
+      navigate("/admin");
     } catch (error) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
+        title: isIpDenied(error) ? "Access Denied" : "Login Failed",
+        description: isIpDenied(error)
+          ? "Administrator login is not available from this IP address."
+          : error instanceof Error ? error.message : "Invalid email or password.",
         variant: "destructive",
       });
     } finally {
@@ -162,12 +100,10 @@ const Auth = () => {
               <Disc3 className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-foreground">
-              {isLogin ? "Welcome Back" : "Create Account"}
+              Admin Sign In
             </h1>
             <p className="text-muted-foreground mt-2">
-              {isLogin
-                ? "Sign in to manage the archive"
-                : "Sign up to start managing the archive"}
+              Sign in to manage the archive
             </p>
           </div>
 
@@ -230,28 +166,13 @@ const Auth = () => {
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
-                  {isLogin ? "Sign In" : "Sign Up"}
+                  Sign In
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
             </Button>
           </form>
 
-          {/* Toggle */}
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setErrors({});
-              }}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {isLogin
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Sign in"}
-            </button>
-          </div>
         </div>
       </motion.div>
     </div>
