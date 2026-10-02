@@ -22,19 +22,6 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (session) {
-          try {
-            await callAdminApi<{ allowed: boolean }>("access");
-            navigate("/admin");
-          } catch (error) {
-            if (isIpDenied(error)) await supabase.auth.signOut();
-          }
-        }
-      }
-    );
-
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session) {
         try {
@@ -45,8 +32,6 @@ const Auth = () => {
         }
       }
     });
-
-    return () => subscription.unsubscribe();
   }, [navigate]);
 
   const validateForm = () => {

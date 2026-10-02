@@ -30,10 +30,9 @@ const Admin = () => {
       .catch(async (error) => {
         if (!active) return;
         setAccessState("denied");
-        if (isIpDenied(error)) await signOut();
       });
     return () => { active = false; };
-  }, [loading, isAuthenticated, navigate, signOut]);
+  }, [loading, isAuthenticated, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -154,7 +153,7 @@ const Admin = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link to={`/album/${album.id}`}>
+                    <Link to={`/album/${album.slug}`}>
                       <Button variant="ghost" size="icon">
                         <ExternalLink className="w-4 h-4" />
                       </Button>
