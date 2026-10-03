@@ -13,9 +13,12 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 
 const getClientIp = (req: Request) => {
-  const raw = req.headers.get("cf-connecting-ip")
+  // Lovable Cloud terminates Cloudflare before the function gateway, so
+  // cf-connecting-ip can identify that proxy. The gateway's first
+  // x-forwarded-for value preserves the original visitor address.
+  const raw = req.headers.get("x-forwarded-for")?.split(",")[0]
     ?? req.headers.get("x-real-ip")
-    ?? req.headers.get("x-forwarded-for")?.split(",")[0]
+    ?? req.headers.get("cf-connecting-ip")
     ?? "";
   return raw.trim().replace(/^::ffff:/, "");
 };
