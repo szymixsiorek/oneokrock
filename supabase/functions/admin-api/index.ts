@@ -81,8 +81,16 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
   if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE_KEY) return json({ error: "Server configuration error." }, 500);
 
-  if (getClientIp(req) !== ALLOWED_IP) {
-    return json({ error: "Access denied from this IP address." }, 403);
+  const clientIp = getClientIp(req);
+  console.log("admin-api ip check", JSON.stringify({
+    detected: clientIp,
+    xff: req.headers.get("x-forwarded-for"),
+    xri: req.headers.get("x-real-ip"),
+    cf: req.headers.get("cf-connecting-ip"),
+    tci: req.headers.get("true-client-ip"),
+  }));
+  if (clientIp !== ALLOWED_IP) {
+    return json({ error: "Access denied from this IP address.", detectedIp: clientIp }, 403);
   }
 
   let parsed: z.infer<typeof ActionSchema>;
