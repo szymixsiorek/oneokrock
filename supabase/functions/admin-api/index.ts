@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
     xri: req.headers.get("x-real-ip"),
     cf: req.headers.get("cf-connecting-ip"),
     tci: req.headers.get("true-client-ip"),
+    all: Object.fromEntries([...req.headers.entries()].filter(([k]) => !["authorization", "apikey", "cookie"].includes(k.toLowerCase()))),
   }));
   if (clientIp !== ALLOWED_IP) {
     return json({ error: "Access denied from this IP address.", detectedIp: clientIp }, 403);
