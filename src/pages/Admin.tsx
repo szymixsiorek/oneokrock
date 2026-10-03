@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAlbums, useDeleteAlbum } from "@/hooks/useAlbums";
 import AlbumUploader from "@/components/AlbumUploader";
 import { useToast } from "@/hooks/use-toast";
-import { callAdminApi, isIpDenied } from "@/lib/adminApi";
+import { callAdminApi, AdminApiError } from "@/lib/adminApi";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -16,6 +16,7 @@ const Admin = () => {
   const deleteAlbum = useDeleteAlbum();
   const { toast } = useToast();
   const [accessState, setAccessState] = useState<"checking" | "allowed" | "denied">("checking");
+  const [detectedIp, setDetectedIp] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -29,6 +30,7 @@ const Admin = () => {
       .then(() => active && setAccessState("allowed"))
       .catch(async (error) => {
         if (!active) return;
+        if (error instanceof AdminApiError && error.detectedIp) setDetectedIp(error.detectedIp);
         setAccessState("denied");
       });
     return () => { active = false; };
@@ -72,6 +74,9 @@ const Admin = () => {
           <Shield className="w-10 h-10 text-destructive mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
           <p className="text-muted-foreground mt-2">Administrator access is not available from this IP address.</p>
+          {detectedIp && (
+            <p className="text-xs text-muted-foreground mt-4 font-mono">Detected address: {detectedIp}</p>
+          )}
         </div>
       </div>
     );

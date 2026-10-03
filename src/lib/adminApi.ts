@@ -2,11 +2,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 export class AdminApiError extends Error {
   status: number;
+  detectedIp?: string;
 
-  constructor(message: string, status = 500) {
+  constructor(message: string, status = 500, detectedIp?: string) {
     super(message);
     this.name = "AdminApiError";
     this.status = status;
+    this.detectedIp = detectedIp;
   }
 }
 
@@ -26,13 +28,15 @@ export async function callAdminApi<T>(action: AdminAction, payload: Record<strin
   if (error) {
     let message = "Admin request failed.";
     let status = 500;
+    let detectedIp: string | undefined;
     const context = (error as { context?: Response }).context;
 
     if (context) {
       status = context.status;
       try {
-        const body = await context.clone().json() as { error?: string };
+        const body = await context.clone().json() as { error?: string; detectedIp?: string };
         message = body.error || message;
+        detectedIp = body.detectedIp;
       } catch {
         message = error.message || message;
       }
@@ -40,7 +44,7 @@ export async function callAdminApi<T>(action: AdminAction, payload: Record<strin
       message = error.message || message;
     }
 
-    throw new AdminApiError(message, status);
+    throw new AdminApiError(message, status, detectedIp);
   }
 
   return data as T;
