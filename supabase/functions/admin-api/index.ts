@@ -2,7 +2,6 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3.25.76";
 
-const ALLOWED_IP = "91.236.137.14";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -11,17 +10,6 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status,
   headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
-
-const getClientIp = (req: Request) => {
-  // Lovable Cloud terminates Cloudflare before the function gateway, so
-  // cf-connecting-ip can identify that proxy. The gateway's first
-  // x-forwarded-for value preserves the original visitor address.
-  const raw = req.headers.get("x-forwarded-for")?.split(",")[0]
-    ?? req.headers.get("x-real-ip")
-    ?? req.headers.get("cf-connecting-ip")
-    ?? "";
-  return raw.trim().replace(/^::ffff:/, "");
-};
 
 const ActionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -81,19 +69,6 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
   if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE_KEY) return json({ error: "Server configuration error." }, 500);
 
-  const clientIp = getClientIp(req);
-  console.log("admin-api ip check", JSON.stringify({
-    detected: clientIp,
-    xff: req.headers.get("x-forwarded-for"),
-    xri: req.headers.get("x-real-ip"),
-    cf: req.headers.get("cf-connecting-ip"),
-    tci: req.headers.get("true-client-ip"),
-    all: Object.fromEntries([...req.headers.entries()].filter(([k]) => !["authorization", "apikey", "cookie"].includes(k.toLowerCase()))),
-  }));
-  if (clientIp !== ALLOWED_IP) {
-    return json({ error: "Access denied from this IP address.", detectedIp: clientIp }, 403);
-  }
-
   let parsed: z.infer<typeof ActionSchema>;
   try {
     const result = ActionSchema.safeParse(await req.json());
@@ -147,6 +122,11 @@ Deno.serve(async (req) => {
     .eq("role", "admin")
     .maybeSingle();
   if (!role) return json({ error: "Administrator access required." }, 403);
+
+  // Every admin action requires a session upgraded with a verified TOTP code.
+  if (claimsData?.claims?.aal !== "aal2") {
+    return json({ error: "Two-factor verification required." }, 403);
+  }
 
   if (parsed.action === "access") return json({ allowed: true });
 
