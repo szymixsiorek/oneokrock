@@ -50,5 +50,5 @@ export async function callAdminApi<T>(action: AdminAction, payload: Record<strin
   return data as T;
 }
 
-export const isIpDenied = (error: unknown) =>
-  error instanceof AdminApiError && error.status === 403 && error.message === "Access denied from this IP address.";
+export const isMfaRequired = (error: unknown) =>
+  error instanceof AdminApiError && error.status === 403 && error.message === "Two-factor verification required.";
