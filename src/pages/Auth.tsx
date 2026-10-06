@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Disc3, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { z } from "zod";
-import { callAdminApi, isIpDenied } from "@/lib/adminApi";
+import { callAdminApi } from "@/lib/adminApi";
+import AdminTwoFactor from "@/components/AdminTwoFactor";
 
 const emailSchema = z.string().email("Please enter a valid email address");
 const passwordSchema = z.string().min(6, "Password must be at least 6 characters");
@@ -17,20 +18,26 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<"credentials" | "mfa">("credentials");
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session) {
+      if (!session) return;
+      const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (data?.currentLevel === "aal2") {
         try {
           await callAdminApi<{ allowed: boolean }>("access");
           navigate("/admin");
-        } catch (error) {
-          if (isIpDenied(error)) await supabase.auth.signOut();
+          return;
+        } catch {
+          await supabase.auth.signOut();
+          return;
         }
       }
+      setStep("mfa");
     });
   }, [navigate]);
 
@@ -65,14 +72,11 @@ const Auth = () => {
       });
       const { error } = await supabase.auth.setSession(session);
       if (error) throw error;
-      toast({ title: "Welcome back!", description: "You have successfully logged in." });
-      navigate("/admin");
+      setStep("mfa");
     } catch (error) {
       toast({
-        title: isIpDenied(error) ? "Access Denied" : "Login Failed",
-        description: isIpDenied(error)
-          ? "Administrator login is not available from this IP address."
-          : error instanceof Error ? error.message : "Invalid email or password.",
+        title: "Login Failed",
+        description: error instanceof Error ? error.message : "Invalid email or password.",
         variant: "destructive",
       });
     } finally {
@@ -107,7 +111,18 @@ const Auth = () => {
             </p>
           </div>
 
-          {/* Form */}
+          {step === "mfa" ? (
+            <AdminTwoFactor
+              onVerified={() => {
+                toast({ title: "Welcome back!", description: "You have successfully logged in." });
+                navigate("/admin");
+              }}
+              onCancel={async () => {
+                await supabase.auth.signOut();
+                setStep("credentials");
+              }}
+            />
+          ) : (
           <form onSubmit={handleAuth} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground">
@@ -172,6 +187,7 @@ const Auth = () => {
               )}
             </Button>
           </form>
+          )}
 
         </div>
       </motion.div>
