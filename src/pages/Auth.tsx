@@ -99,6 +99,7 @@ const Auth = () => {
       >
         <div className="glass-panel rounded-2xl p-8">
           {/* Header */}
+          {step === "credentials" && (
           <div className="text-center mb-8">
             <div className="w-16 h-16 rounded-full bg-neon-gradient flex items-center justify-center mx-auto mb-4">
               <Disc3 className="w-8 h-8 text-white" />
@@ -110,6 +111,7 @@ const Auth = () => {
               Sign in to manage the archive
             </p>
           </div>
+          )}
 
           {step === "mfa" ? (
             <AdminTwoFactor
