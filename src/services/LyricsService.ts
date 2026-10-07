@@ -190,7 +190,7 @@ export const fetchLyrics = async (
     if (result) return result;
 
     // If dual title (e.g. "完全感覚Dreamer / Kanzen Kankaku Dreamer"), try each part
-    if (titleParts.length > 1) {
+    if (titleParts.length > 0) {
       for (const part of titleParts) {
         await delay(200);
         result = await strictSearch(artist, part);
@@ -204,7 +204,7 @@ export const fetchLyrics = async (
     if (result) return result;
 
     // Try each dual-title part in fuzzy search
-    if (titleParts.length > 1) {
+    if (titleParts.length > 0) {
       for (const part of titleParts) {
         await delay(200);
         result = await fuzzySearch(artist, part, durationSec);
@@ -217,7 +217,7 @@ export const fetchLyrics = async (
     result = await broadSearch(cleanedTitle, durationSec);
     if (result) return result;
 
-    if (titleParts.length > 1) {
+    if (titleParts.length > 0) {
       for (const part of titleParts) {
         await delay(200);
         result = await broadSearch(part, durationSec);
