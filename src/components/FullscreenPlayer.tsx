@@ -19,6 +19,9 @@ import { Slider } from "@/components/ui/slider";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchLyrics, SyncedLine } from "@/services/LyricsService";
+import { extractCoverColor } from "@/lib/coverColor";
+import { FittedLyricLine } from "@/components/FittedLyricLine";
+import type { CSSProperties } from "react";
 
 interface FullscreenPlayerProps {
   isOpen: boolean;
@@ -61,7 +64,19 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [lyricsError, setLyricsError] = useState<string | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
-  const activeLineRef = useRef<HTMLParagraphElement>(null);
+  const activeLineRef = useRef<HTMLParagraphElement | null>(null);
+  const [coverAccent, setCoverAccent] = useState<string | undefined>();
+
+  useEffect(() => {
+    let cancelled = false;
+    setCoverAccent(undefined);
+    if (currentTrack?.albumCover) {
+      extractCoverColor(currentTrack.albumCover).then((color) => {
+        if (!cancelled) setCoverAccent(`${color.h} ${color.s}% ${color.l}%`);
+      }).catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [currentTrack?.albumCover]);
 
   // Fetch lyrics when track changes or lyrics panel opens
   useEffect(() => {
@@ -169,16 +184,11 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
           transition={{ type: "spring", damping: 30, stiffness: 300 }}
-          className="fixed inset-0 z-[9999] bg-background"
-          style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
+          className="fullscreen-player fixed inset-0 z-[9999] bg-background"
+          style={{ "--fullscreen-accent": coverAccent } as CSSProperties}
         >
           {/* Background gradient */}
-          <div 
-            className="absolute inset-0 opacity-30"
-            style={{
-              background: `radial-gradient(ellipse at center top, hsl(var(--primary)) 0%, transparent 70%)`,
-            }}
-          />
+          <div className="fullscreen-cover-glow absolute inset-0 opacity-30 pointer-events-none" />
 
           <div className="relative h-full flex flex-col">
             {/* Header */}
@@ -207,6 +217,8 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => { setShowLyrics(!showLyrics); if (!showLyrics) setShowQueue(false); }}
+                  aria-label="Lyrics"
+                  aria-pressed={showLyrics}
                   className={`p-2 rounded-full transition-colors ${
                     showLyrics ? "bg-primary text-primary-foreground" : "bg-secondary/50 hover:bg-secondary"
                   }`}
@@ -247,42 +259,29 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                     className="absolute inset-0 z-10 flex items-center justify-center"
                   >
                     {/* Dark overlay for contrast */}
-                    <div className="absolute inset-0 bg-black/40" />
+                    <div className="absolute inset-0 bg-background/40" />
 
-                    <div className="relative w-full max-w-4xl mx-auto h-[65vh] flex items-center justify-center px-4">
+                    <div className="relative w-full h-full max-h-[65vh] flex items-center justify-center px-3 md:px-8">
                       {lyricsLoading ? (
                         <Loader2 className="w-10 h-10 text-primary animate-spin" />
                       ) : lyricsError ? (
-                        <p className="text-white/60 text-xl font-medium font-[Inter,'Noto_Sans_JP',sans-serif]">{lyricsError}</p>
+                        <p className="text-foreground/60 text-xl font-medium font-[Inter,'Noto_Sans_JP',sans-serif]">{lyricsError}</p>
                       ) : syncedLines ? (
                         <div
                           ref={lyricsContainerRef}
-                          className="w-full h-full overflow-y-auto scrollbar-none"
-                          style={{
-                            maskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
-                            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
-                          }}
+                          className="fullscreen-lyrics-scroll w-full h-full overflow-y-auto overflow-x-hidden"
                         >
                           {/* Spacer to allow first line to center */}
                           <div className="h-[30vh]" />
                           <div className="space-y-6 py-4">
                             {syncedLines.map((line, i) => (
-                              <p
+                              <FittedLyricLine
                                 key={i}
-                                ref={i === activeLineIndex ? activeLineRef : null}
-                                className={`text-center leading-[1.5] font-[Inter,'Noto_Sans_JP',sans-serif] cursor-pointer transition-all duration-500 ease-out ${
-                                  i === activeLineIndex
-                                    ? "text-white text-3xl md:text-4xl font-bold scale-105 blur-0"
-                                    : "text-white/40 text-xl md:text-2xl font-medium blur-[0.5px]"
-                                }`}
-                                style={{
-                                  transform: i === activeLineIndex ? "scale(1.05)" : "scale(1)",
-                                  transition: "all 0.5s cubic-bezier(0.25, 0.1, 0.25, 1)",
-                                }}
-                                onClick={() => seek(line.time)}
-                              >
-                                {line.text || "♪"}
-                              </p>
+                                activeRef={i === activeLineIndex ? activeLineRef : undefined}
+                                active={i === activeLineIndex}
+                                onSeek={() => seek(line.time)}
+                                text={line.text}
+                              />
                             ))}
                           </div>
                           {/* Spacer to allow last line to center */}
@@ -290,16 +289,14 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                         </div>
                       ) : plainLyrics ? (
                         <div
-                          className="w-full h-full overflow-y-auto scrollbar-none"
-                          style={{
-                            maskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
-                            WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%)",
-                          }}
+                          className="fullscreen-lyrics-scroll w-full h-full overflow-y-auto overflow-x-hidden"
                         >
                           <div className="h-[15vh]" />
-                          <pre className="whitespace-pre-wrap text-xl md:text-2xl text-white/70 leading-[1.8] text-center font-[Inter,'Noto_Sans_JP',sans-serif] font-medium">
-                            {plainLyrics}
-                          </pre>
+                           <div className="space-y-4">
+                             {plainLyrics.split("\n").map((text, index) => (
+                               <FittedLyricLine key={index} text={text} />
+                             ))}
+                           </div>
                           <div className="h-[15vh]" />
                         </div>
                       ) : null}
@@ -319,7 +316,7 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                   showQueue ? "w-48 h-48 md:w-64 md:h-64" : "w-64 h-64 md:w-80 md:h-80 lg:w-96 lg:h-96"
                 }`}
               >
-                <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl shadow-primary/20">
+                <div className="fullscreen-cover-frame w-full h-full rounded-2xl overflow-hidden">
                   <img
                     src={currentTrack.albumCover || "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=600&fit=crop"}
                     alt={currentTrack.title}
