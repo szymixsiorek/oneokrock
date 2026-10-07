@@ -4,7 +4,7 @@ interface FittedLyricLineProps {
   text: string;
   active?: boolean;
   onSeek?: () => void;
-  activeRef?: React.RefObject<HTMLParagraphElement>;
+  activeRef?: React.MutableRefObject<HTMLParagraphElement | null>;
 }
 
 export const FittedLyricLine = ({ text, active = false, onSeek, activeRef }: FittedLyricLineProps) => {
