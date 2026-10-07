@@ -41,8 +41,8 @@ const parseSyncedLyrics = (raw: string): SyncedLine[] => {
 /** Clean title for search: strip track numbers, parenthetical info, brackets, common suffixes */
 const cleanTitle = (title: string): string => {
   return title
-    // Remove track number prefix like "01. " or "05. "
-    .replace(/^\d{1,2}\.\s*/, "")
+    // Remove track number prefix like "01. ", "05 - ", "11 " (only once, at the start)
+    .replace(/^\d{1,3}(?:\s*[.)\-–—:]\s*|\s+)(?=\S)/, "")
     // Remove everything in parentheses
     .replace(/\s*\([^)]*\)/g, "")
     // Remove everything in brackets
@@ -56,8 +56,16 @@ const cleanTitle = (title: string): string => {
 
 /** Split "Japanese Title / English Title" into parts */
 const splitDualTitle = (title: string): string[] => {
-  const parts = title.split(/\s*[\/／]\s*/);
-  return parts.map((p) => p.trim()).filter((p) => p.length > 0);
+  const parts = title.split(/\s*[\/／]\s*/).map((p) => p.trim()).filter((p) => p.length > 0);
+  // Extra spelling variants help older songs whose titles are written differently in the database
+  const variants = new Set<string>(parts.length > 1 ? parts : []);
+  for (const p of [title, ...parts]) {
+    variants.add(p.replace(/[-_~]+/g, " ").replace(/\s+/g, " ").trim()); // "20_20" -> "20 20"
+    variants.add(p.replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim()); // drop punctuation
+    variants.add(p.replace(/\s+/g, "")); // "Kimi Shidai" -> "KimiShidai"
+  }
+  variants.delete(title);
+  return [...variants].filter((v) => v.length > 1);
 };
 
 /** Small delay to avoid hammering the API */
@@ -165,6 +173,48 @@ const broadSearch = async (
   }
 };
 
+// ── Step 2b: Romaji-tolerant search (older Japanese titles) ──────────
+
+/** Normalise romaji so "Uchu Hikoshi", "Uchuhikoushi" and "Uchuuhikoushi" compare equal */
+const romajiKey = (t: string) =>
+  cleanTitle(t.replace(/^.*?\s-\s(?=[A-Za-z])/, "")) // drop "07 - " or "世間知らず - " prefixes
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/ou/g, "o")
+    .replace(/([aeiou])\1+/g, "$1");
+
+const romajiSearch = async (
+  artist: string,
+  title: string,
+  durationSec: number | null
+): Promise<LyricsResult | null> => {
+  const key = romajiKey(title);
+  const firstWord = title.split(/\s+/)[0];
+  if (!key || !firstWord) return null;
+  try {
+    const params = new URLSearchParams({ q: `${artist} ${firstWord}` });
+    const res = await fetch(`${LRCLIB_API_SEARCH}?${params}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const results: LrclibResult[] = await res.json();
+    const artistKey = artist.toLowerCase().replace(/\s/g, "");
+    const candidates = results.filter((r) => {
+      if (!r.artistName.toLowerCase().replace(/\s/g, "").includes(artistKey)) return false;
+      const k = romajiKey(r.trackName);
+      return k === key || k.includes(key) || key.includes(k) && k.length > 3;
+    });
+    const ordered = durationSec != null
+      ? [...candidates].sort((a, b) => Math.abs(a.duration - durationSec) - Math.abs(b.duration - durationSec))
+      : candidates;
+    for (const r of ordered) {
+      const built = buildResult(r);
+      if (built) return built;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 // ── Main exported function ──────────────────────────────────────────
 
 export const fetchLyrics = async (
@@ -182,7 +232,7 @@ export const fetchLyrics = async (
     if (result) return result;
 
     // If dual title (e.g. "完全感覚Dreamer / Kanzen Kankaku Dreamer"), try each part
-    if (titleParts.length > 1) {
+    if (titleParts.length > 0) {
       for (const part of titleParts) {
         await delay(200);
         result = await strictSearch(artist, part);
@@ -196,7 +246,7 @@ export const fetchLyrics = async (
     if (result) return result;
 
     // Try each dual-title part in fuzzy search
-    if (titleParts.length > 1) {
+    if (titleParts.length > 0) {
       for (const part of titleParts) {
         await delay(200);
         result = await fuzzySearch(artist, part, durationSec);
@@ -204,12 +254,16 @@ export const fetchLyrics = async (
       }
     }
 
+    await delay(200);
+    result = await romajiSearch(artist, cleanedTitle, durationSec);
+    if (result) return result;
+
     // Step 3: Broad search (title only, no artist)
     await delay(300);
     result = await broadSearch(cleanedTitle, durationSec);
     if (result) return result;
 
-    if (titleParts.length > 1) {
+    if (titleParts.length > 0) {
       for (const part of titleParts) {
         await delay(200);
         result = await broadSearch(part, durationSec);
