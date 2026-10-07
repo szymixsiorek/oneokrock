@@ -154,6 +154,15 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
     setVolume(value[0]);
   };
 
+  const revealNearbyScrollbar = (event: React.MouseEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.classList.toggle("scrollbar-near", bounds.right - event.clientX < 64);
+  };
+
+  const hideScrollbar = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.currentTarget.classList.remove("scrollbar-near");
+  };
+
   const handleQueueTrackClick = (track: typeof currentTrack, isFromPriorityQueue: boolean) => {
     if (track?.mp3_url) {
       play(track);
@@ -270,6 +279,8 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                         <div
                           ref={lyricsContainerRef}
                           className="fullscreen-lyrics-scroll w-full h-full overflow-y-auto overflow-x-hidden"
+                          onMouseMove={revealNearbyScrollbar}
+                          onMouseLeave={hideScrollbar}
                         >
                           {/* Spacer to allow first line to center */}
                           <div className="h-[30vh]" />
@@ -290,6 +301,8 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                       ) : plainLyrics ? (
                         <div
                           className="fullscreen-lyrics-scroll w-full h-full overflow-y-auto overflow-x-hidden"
+                          onMouseMove={revealNearbyScrollbar}
+                          onMouseLeave={hideScrollbar}
                         >
                           <div className="h-[15vh]" />
                            <div className="space-y-4">
