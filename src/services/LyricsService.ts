@@ -41,8 +41,8 @@ const parseSyncedLyrics = (raw: string): SyncedLine[] => {
 /** Clean title for search: strip track numbers, parenthetical info, brackets, common suffixes */
 const cleanTitle = (title: string): string => {
   return title
-    // Remove track number prefix like "01. " or "05. "
-    .replace(/^\d{1,2}\.\s*/, "")
+    // Remove track number prefix like "01. ", "05 - ", "11 " (only once, at the start)
+    .replace(/^\d{1,3}(?:\s*[.)\-–—:]\s*|\s+)(?=\S)/, "")
     // Remove everything in parentheses
     .replace(/\s*\([^)]*\)/g, "")
     // Remove everything in brackets
@@ -56,8 +56,16 @@ const cleanTitle = (title: string): string => {
 
 /** Split "Japanese Title / English Title" into parts */
 const splitDualTitle = (title: string): string[] => {
-  const parts = title.split(/\s*[\/／]\s*/);
-  return parts.map((p) => p.trim()).filter((p) => p.length > 0);
+  const parts = title.split(/\s*[\/／]\s*/).map((p) => p.trim()).filter((p) => p.length > 0);
+  // Extra spelling variants help older songs whose titles are written differently in the database
+  const variants = new Set<string>(parts.length > 1 ? parts : []);
+  for (const p of [title, ...parts]) {
+    variants.add(p.replace(/[-_~]+/g, " ").replace(/\s+/g, " ").trim()); // "20_20" -> "20 20"
+    variants.add(p.replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim()); // drop punctuation
+    variants.add(p.replace(/\s+/g, "")); // "Kimi Shidai" -> "KimiShidai"
+  }
+  variants.delete(title);
+  return [...variants].filter((v) => v.length > 1);
 };
 
 /** Small delay to avoid hammering the API */
