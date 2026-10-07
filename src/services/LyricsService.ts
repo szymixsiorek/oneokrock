@@ -173,6 +173,48 @@ const broadSearch = async (
   }
 };
 
+// ── Step 2b: Romaji-tolerant search (older Japanese titles) ──────────
+
+/** Normalise romaji so "Uchu Hikoshi", "Uchuhikoushi" and "Uchuuhikoushi" compare equal */
+const romajiKey = (t: string) =>
+  cleanTitle(t.replace(/^.*?\s-\s(?=[A-Za-z])/, "")) // drop "07 - " or "世間知らず - " prefixes
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/ou/g, "o")
+    .replace(/([aeiou])\1+/g, "$1");
+
+const romajiSearch = async (
+  artist: string,
+  title: string,
+  durationSec: number | null
+): Promise<LyricsResult | null> => {
+  const key = romajiKey(title);
+  const firstWord = title.split(/\s+/)[0];
+  if (!key || !firstWord) return null;
+  try {
+    const params = new URLSearchParams({ q: `${artist} ${firstWord}` });
+    const res = await fetch(`${LRCLIB_API_SEARCH}?${params}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const results: LrclibResult[] = await res.json();
+    const artistKey = artist.toLowerCase().replace(/\s/g, "");
+    const candidates = results.filter((r) => {
+      if (!r.artistName.toLowerCase().replace(/\s/g, "").includes(artistKey)) return false;
+      const k = romajiKey(r.trackName);
+      return k === key || k.includes(key) || key.includes(k) && k.length > 3;
+    });
+    const ordered = durationSec != null
+      ? [...candidates].sort((a, b) => Math.abs(a.duration - durationSec) - Math.abs(b.duration - durationSec))
+      : candidates;
+    for (const r of ordered) {
+      const built = buildResult(r);
+      if (built) return built;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 // ── Main exported function ──────────────────────────────────────────
 
 export const fetchLyrics = async (
@@ -211,6 +253,10 @@ export const fetchLyrics = async (
         if (result) return result;
       }
     }
+
+    await delay(200);
+    result = await romajiSearch(artist, cleanedTitle, durationSec);
+    if (result) return result;
 
     // Step 3: Broad search (title only, no artist)
     await delay(300);
