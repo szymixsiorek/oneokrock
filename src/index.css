@@ -301,6 +301,12 @@
       inset 0 1px 0 hsla(var(--album-accent), 0.12);
   }
 
+  .player-theme {
+    --primary: var(--player-accent, var(--neon-red));
+    --ring: var(--primary);
+    --primary-foreground: var(--player-on-accent, var(--foreground));
+  }
+
   .fullscreen-player {
     --fullscreen-accent: var(--primary);
     --fullscreen-glow: radial-gradient(ellipse at center top, hsl(var(--fullscreen-accent)) 0%, transparent 70%);

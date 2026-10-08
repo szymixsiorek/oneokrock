@@ -5,3 +5,4 @@
 - [x] Match fullscreen glow to the playing album cover.
 - [x] Keep lyrics on one line and reveal the right-offset scrollbar only on hover.
 - [x] Verify fullscreen player changes in the browser.
+- [x] Match compact and fullscreen playback controls to the playing cover and verify them.
