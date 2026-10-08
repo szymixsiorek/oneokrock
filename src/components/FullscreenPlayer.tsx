@@ -19,13 +19,13 @@ import { Slider } from "@/components/ui/slider";
 import { useAudioPlayer } from "@/contexts/AudioPlayerContext";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchLyrics, SyncedLine } from "@/services/LyricsService";
-import { extractCoverColor } from "@/lib/coverColor";
 import { FittedLyricLine } from "@/components/FittedLyricLine";
 import type { CSSProperties } from "react";
 
 interface FullscreenPlayerProps {
   isOpen: boolean;
   onClose: () => void;
+  coverTheme: CSSProperties;
 }
 
 const formatTime = (seconds: number): string => {
@@ -35,7 +35,7 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
-const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
+const FullscreenPlayer = ({ isOpen, onClose, coverTheme }: FullscreenPlayerProps) => {
   const {
     currentTrack,
     priorityQueue,
@@ -65,18 +65,6 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
   const [lyricsError, setLyricsError] = useState<string | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const activeLineRef = useRef<HTMLParagraphElement | null>(null);
-  const [coverAccent, setCoverAccent] = useState<string | undefined>();
-
-  useEffect(() => {
-    let cancelled = false;
-    setCoverAccent(undefined);
-    if (currentTrack?.albumCover) {
-      extractCoverColor(currentTrack.albumCover).then((color) => {
-        if (!cancelled) setCoverAccent(`${color.h} ${color.s}% ${color.l}%`);
-      }).catch(() => {});
-    }
-    return () => { cancelled = true; };
-  }, [currentTrack?.albumCover]);
 
   // Fetch lyrics when track changes or lyrics panel opens
   useEffect(() => {
@@ -193,8 +181,8 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
           transition={{ type: "spring", damping: 30, stiffness: 300 }}
-          className="fullscreen-player fixed inset-0 z-[9999] bg-background"
-          style={{ "--fullscreen-accent": coverAccent } as CSSProperties}
+          className="player-theme fullscreen-player fixed inset-0 z-[9999] bg-background"
+          style={coverTheme}
         >
           {/* Background gradient */}
           <div className="fullscreen-cover-glow absolute inset-0 opacity-30 pointer-events-none" />
@@ -240,6 +228,8 @@ const FullscreenPlayer = ({ isOpen, onClose }: FullscreenPlayerProps) => {
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => { setShowQueue(!showQueue); if (!showQueue) setShowLyrics(false); }}
+                  aria-label="Queue"
+                  aria-pressed={showQueue}
                   className={`p-2 rounded-full transition-colors relative ${
                     showQueue ? "bg-primary text-primary-foreground" : "bg-secondary/50 hover:bg-secondary"
                   }`}
