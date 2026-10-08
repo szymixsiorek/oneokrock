@@ -16,6 +16,7 @@ export interface SyncedLine {
 interface LrclibResult {
   trackName: string;
   artistName: string;
+  albumName?: string;
   duration: number;
   plainLyrics: string | null;
   syncedLyrics: string | null;
