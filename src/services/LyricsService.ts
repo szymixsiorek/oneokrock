@@ -76,7 +76,7 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const parseDurationToSeconds = (dur: string | null | undefined): number | null => {
   if (!dur) return null;
   const parts = dur.split(":").map(Number);
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 2) return parts[0] * 60 + parts[1] || null;
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   return null;
 };
