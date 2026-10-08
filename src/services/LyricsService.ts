@@ -16,6 +16,7 @@ export interface SyncedLine {
 interface LrclibResult {
   trackName: string;
   artistName: string;
+  albumName?: string;
   duration: number;
   plainLyrics: string | null;
   syncedLyrics: string | null;
@@ -75,7 +76,7 @@ const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const parseDurationToSeconds = (dur: string | null | undefined): number | null => {
   if (!dur) return null;
   const parts = dur.split(":").map(Number);
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 2) return parts[0] * 60 + parts[1] || null;
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   return null;
 };
@@ -215,6 +216,52 @@ const romajiSearch = async (
   }
 };
 
+// ── Step 0: Ranked search (prefer synced + Japanese version) ────────
+
+const JP_CHARS = /[\u3040-\u30ff\u4e00-\u9fff]/;
+const titleKey = (t: string) =>
+  cleanTitle(t.replace(/\s+-\s+.*$/, "")).toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+/** Score a candidate: synced lyrics first, then the Japanese version, then duration match. */
+export const scoreCandidate = (r: LrclibResult, wantedKey: string, durationSec: number | null): number => {
+  if (titleKey(r.trackName) !== wantedKey) return -Infinity;
+  if (!r.syncedLyrics && !r.plainLyrics) return -Infinity;
+  const label = `${r.trackName} ${(r as { albumName?: string }).albumName ?? ""}`.toLowerCase();
+  let score = 0;
+  if (r.syncedLyrics) score += 100;
+  if (JP_CHARS.test(r.syncedLyrics || r.plainLyrics || "")) score += 50;
+  if (label.includes("international")) score -= 20;
+  if (/live|tour/.test(label)) score -= 40;
+  if (r.duration < 20) score -= 200; // broken entries
+  if (durationSec != null) score -= Math.min(Math.abs(r.duration - durationSec), 30);
+  return score;
+};
+
+export const pickBest = (results: LrclibResult[], title: string, durationSec: number | null) => {
+  const key = titleKey(title);
+  let best: LrclibResult | null = null;
+  let bestScore = -Infinity;
+  for (const r of results) {
+    const s = scoreCandidate(r, key, durationSec);
+    if (s > bestScore) { best = r; bestScore = s; }
+  }
+  return best;
+};
+
+const rankedSearch = async (artist: string, title: string, durationSec: number | null) => {
+  const queries = [`${artist} ${title}`, `${artist} ${title} Japanese`];
+  const all: LrclibResult[] = [];
+  for (const q of queries) {
+    try {
+      const res = await fetch(`${LRCLIB_API_SEARCH}?${new URLSearchParams({ q })}`, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) all.push(...(await res.json()));
+    } catch { /* ignore */ }
+  }
+  const artistKey = artist.toLowerCase().replace(/\s/g, "");
+  const best = pickBest(all.filter((r) => r.artistName.toLowerCase().replace(/\s/g, "").includes(artistKey)), title, durationSec);
+  return best ? buildResult(best) : null;
+};
+
 // ── Main exported function ──────────────────────────────────────────
 
 export const fetchLyrics = async (
@@ -227,9 +274,15 @@ export const fetchLyrics = async (
     const durationSec = parseDurationToSeconds(duration);
     const titleParts = splitDualTitle(cleanedTitle);
 
+    let result = await rankedSearch(artist, cleanedTitle, durationSec);
+    if (result?.syncedLyrics) return result;
+    const plainFallback = result;
+
     // Step 1: Strict search with cleaned title
-    let result = await strictSearch(artist, cleanedTitle);
-    if (result) return result;
+    result = await strictSearch(artist, cleanedTitle);
+    if (result?.syncedLyrics) return result;
+    if (result && !plainFallback) return result;
+    if (plainFallback) return plainFallback;
 
     // If dual title (e.g. "完全感覚Dreamer / Kanzen Kankaku Dreamer"), try each part
     if (titleParts.length > 0) {
